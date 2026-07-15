@@ -1,16 +1,18 @@
 import uuid
+from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, Path, File
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from sqlalchemy import desc, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update, func, desc
 from sqlalchemy.sql.operators import or_
 
 from app.auth import get_current_seller
 from app.db_depends import get_db
 from app.models.categories import Category
 from app.models.products import Product
-from app.schemas.products import ProductCreate, Product as ProductSchema, ProductList
 from app.models.users import User as UserModel
+from app.schemas.products import Product as ProductSchema
+from app.schemas.products import ProductCreate, ProductList
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 MEDIA_ROOT = BASE_DIR / "media" / "products"
@@ -18,10 +20,7 @@ MEDIA_ROOT.mkdir(parents=True, exist_ok=True)
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
 MAX_IMAGE_SIZE = 2 * 1024 * 1024
 
-router = APIRouter(
-    prefix='/products',
-    tags=['products']
-)
+router = APIRouter(prefix="/products", tags=["products"])
 
 
 async def save_product_image(file: UploadFile) -> str:
@@ -29,15 +28,17 @@ async def save_product_image(file: UploadFile) -> str:
     Сохраняет изображение товара и возвращает относительный URL.
     """
     if file.content_type not in ALLOWED_IMAGE_TYPES:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Only JPG, PNG or WebP images are allowed')
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "Only JPG, PNG or WebP images are allowed"
+        )
     content = await file.read()
     if len(content) > MAX_IMAGE_SIZE:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Image is too large')
-    extension = Path(file.filename or '').suffix.lower() or '.jpg'
-    file_name = f'{uuid.uuid4()}{extension}'
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Image is too large")
+    extension = Path(file.filename or "").suffix.lower() or ".jpg"
+    file_name = f"{uuid.uuid4()}{extension}"
     file_path = MEDIA_ROOT / file_name
     file_path.write_bytes(content)
-    return f'/media/products/{file_name}'
+    return f"/media/products/{file_name}"
 
 
 async def remove_product_image(url: str | None) -> None:
@@ -46,25 +47,27 @@ async def remove_product_image(url: str | None) -> None:
     """
     if not url:
         return
-    relative_path = url.lstrip('/')
+    relative_path = url.lstrip("/")
     file_path = BASE_DIR / relative_path
     if file_path.exists():
         file_path.unlink()
 
 
-@router.get('/', response_model=ProductList)
+@router.get("/", response_model=ProductList)
 async def get_all_products(
-        page: int = Query(1, ge=1),
-        page_size: int = Query(20, ge=1, le=100),
-        search: str | None = Query(None, min_length=1, description='Поиск по названию товара'),
-        category_id: int | None = Query(None, description='ID категории для фильтрации'),
-        min_price: float | None = Query(None, description='Минимальная цена товара'),
-        max_price: float | None = Query(None, description='Максимальная цена товара'),
-        is_stock: bool | None = Query(
-            None, description='true — только товары в наличии, false — только без остатка'
-        ),
-        seller_id: int | None = Query(None, description='ID продавца для фильтрации'),
-        db: AsyncSession = Depends(get_db)
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    search: str | None = Query(
+        None, min_length=1, description="Поиск по названию товара"
+    ),
+    category_id: int | None = Query(None, description="ID категории для фильтрации"),
+    min_price: float | None = Query(None, description="Минимальная цена товара"),
+    max_price: float | None = Query(None, description="Максимальная цена товара"),
+    is_stock: bool | None = Query(
+        None, description="true — только товары в наличии, false — только без остатка"
+    ),
+    seller_id: int | None = Query(None, description="ID продавца для фильтрации"),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Возвращает список всех товаров.
@@ -72,7 +75,7 @@ async def get_all_products(
     if min_price is not None and max_price is not None and min_price > max_price:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='min_price не может быть больше max_price'
+            detail="min_price не может быть больше max_price",
         )
     filters = [Product.is_active == True]
     if category_id is not None:
@@ -92,65 +95,64 @@ async def get_all_products(
     if search:
         search_value = search.strip()
         if search_value:
-            ts_query_en = func.websearch_to_tsquery('english', search_value)
-            ts_query_ru = func.websearch_to_tsquery('russian', search_value)
+            ts_query_en = func.websearch_to_tsquery("english", search_value)
+            ts_query_ru = func.websearch_to_tsquery("russian", search_value)
             ts_query = or_(
-                Product.tsv.op('@@')(ts_query_en),
-                Product.tsv.op('@@')(ts_query_ru)
+                Product.tsv.op("@@")(ts_query_en), Product.tsv.op("@@")(ts_query_ru)
             )
             filters.append(ts_query)
             rank_col = func.greatest(
                 func.ts_rank_cd(Product.tsv, ts_query_en),
-                func.ts_rank_cd(Product.tsv, ts_query_ru)
-            ).label('rank')
+                func.ts_rank_cd(Product.tsv, ts_query_ru),
+            ).label("rank")
             total_stmt = select(func.count()).select_from(Product).where(*filters)
 
     total = await db.scalar(total_stmt) or 0
 
     if rank_col is not None:
-        products_stmt = (await db.scalars(
-            select(Product, rank_col)
-            .where(*filters)
-            .order_by(desc(rank_col), Product.id)
-            .offset((page - 1) * page_size)
-            .limit(page_size)
-        )).all()
+        products_stmt = (
+            await db.scalars(
+                select(Product, rank_col)
+                .where(*filters)
+                .order_by(desc(rank_col), Product.id)
+                .offset((page - 1) * page_size)
+                .limit(page_size)
+            )
+        ).all()
         products = [pr[0] for pr in products_stmt]
     else:
-        products = (await db.scalars(
-            select(Product)
-            .where(*filters)
-            .order_by(Product.id)
-            .offset((page - 1) * page_size)
-            .limit(page_size)
-        )).all()
-    return {
-        'items': products,
-        'total': total,
-        'page': page,
-        'page_size': page_size
-    }
+        products = (
+            await db.scalars(
+                select(Product)
+                .where(*filters)
+                .order_by(Product.id)
+                .offset((page - 1) * page_size)
+                .limit(page_size)
+            )
+        ).all()
+    return {"items": products, "total": total, "page": page, "page_size": page_size}
 
 
-@router.post('/', response_model=ProductSchema, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=ProductSchema, status_code=status.HTTP_201_CREATED)
 async def create_product(
-        product: ProductCreate = Depends(ProductCreate.as_form),
-        image: UploadFile | None = File(None),
-        db: AsyncSession = Depends(get_db),
-        current_user: UserModel = Depends(get_current_seller)
+    product: ProductCreate = Depends(ProductCreate.as_form),
+    image: UploadFile | None = File(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_seller),
 ):
     """
     Создаёт новый товар.
     """
     stmt = await db.scalars(
         select(Category).where(
-            Category.id == product.category_id, Category.is_active == True
+            Category.id == product.category_id, Category.is_active
         )
     )
     bd_category = stmt.first()
     if not bd_category:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail='Category not found or inactive'
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Category not found or inactive",
         )
     image_url = await save_product_image(image) if image else None
     db_product = Product(
@@ -162,76 +164,85 @@ async def create_product(
     return db_product
 
 
-@router.get('/{product_id}', response_model=ProductSchema)
+@router.get("/{product_id}", response_model=ProductSchema)
 async def get_product(product_id: int, db: AsyncSession = Depends(get_db)):
     """
     Возвращает детальную информацию о товаре по его ID.
     """
     stmt = await db.scalars(
-        select(Product).where(Product.id == product_id, Product.is_active == True)
+        select(Product).where(Product.id == product_id, Product.is_active)
     )
     db_product = stmt.first()
     if not db_product:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail='Product not found or inactive'
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Product not found or inactive",
         )
     return db_product
 
 
 @router.get("/category/{category_id}", response_model=list[ProductSchema])
-async def get_products_by_category(category_id: int, db: AsyncSession = Depends(get_db)):
+async def get_products_by_category(
+    category_id: int, db: AsyncSession = Depends(get_db)
+):
     """
     Возвращает список товаров в указанной категории по её ID.
     """
     stmt = await db.scalars(
-        select(Category).where(Category.id == category_id, Category.is_active == True)
+        select(Category).where(Category.id == category_id, Category.is_active)
     )
     db_category = stmt.first()
     if not db_category:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail='Category not found or inactive'
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Category not found or inactive",
         )
     stmt_products = await db.scalars(
         select(Product).where(
-            Product.category_id == category_id, Product.is_active == True
+            Product.category_id == category_id, Product.is_active
         )
     )
     products = stmt_products.all()
     return products
 
 
-@router.put("/{product_id}", response_model=ProductSchema, status_code=status.HTTP_200_OK)
+@router.put(
+    "/{product_id}", response_model=ProductSchema, status_code=status.HTTP_200_OK
+)
 async def update_product(
-        product_id: int,
-        product: ProductCreate = Depends(ProductCreate.as_form),
-        image: UploadFile | None = File(None),
-        db: AsyncSession = Depends(get_db),
-        current_user: UserModel = Depends(get_current_seller)
+    product_id: int,
+    product: ProductCreate = Depends(ProductCreate.as_form),
+    image: UploadFile | None = File(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_seller),
 ):
     """
     Обновляет товар по его ID.
     """
     stmt = await db.scalars(
-        select(Product).where(Product.id == product_id, Product.is_active == True)
+        select(Product).where(Product.id == product_id, Product.is_active)
     )
     db_product = stmt.first()
     if not db_product:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail='Product not found or inactive'
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Product not found or inactive",
         )
     if not db_product.seller_id != current_user.id:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail='You can only update your own products'
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only update your own products",
         )
     stmt_db_category = await db.scalars(
         select(Category).where(
-            Category.id == db_product.category_id, Category.is_active == True
+            Category.id == db_product.category_id, Category.is_active
         )
     )
     db_category = stmt_db_category.first()
     if not db_category:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail='Category not found or inactive'
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Category not found or inactive",
         )
     await db.execute(
         update(Product).where(Product.id == product_id).values(**product.model_dump())
@@ -246,25 +257,28 @@ async def update_product(
 
 @router.delete("/{product_id}", status_code=status.HTTP_200_OK)
 async def delete_product(
-        product_id: int,
-        db: AsyncSession = Depends(get_db),
-        current_user: UserModel = Depends(get_current_seller)
+    product_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_seller),
 ):
     """
     Удаляет товар по его ID.
     """
     stmt = await db.scalars(
-        select(Product).where(Product.id == product_id, Product.is_active == True)
+        select(Product).where(Product.id == product_id, Product.is_active)
     )
     db_product = stmt.first()
     if not db_product:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
     if not db_product.seller_id != current_user.id:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail='You can only delete your own products'
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only delete your own products",
         )
     await db.execute(
-        update(Product).where(Product.id == product_id).values(image_url=None, is_active=False)
+        update(Product)
+        .where(Product.id == product_id)
+        .values(image_url=None, is_active=False)
     )
     await db.commit()
     return {"status": "success", "message": "Product marked as inactive"}
