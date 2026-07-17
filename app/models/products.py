@@ -18,15 +18,16 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
 
 if TYPE_CHECKING:
-    from .cart_items import CartItem
+    from .cart_items import CartItemORM
     from .categories import CategoryORM
-    from .orders import OrderItem
+    from .orders import OrderItemORM
     from .reviews import ReviewORM
     from .users import UserORM
 
 
 class ProductORM(Base):
     __tablename__ = "products"
+    __table_args__ = (Index("idx_products_tsv_gin", "tsv", postgresql_using="gin"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
@@ -66,9 +67,7 @@ class ProductORM(Base):
     category: Mapped["CategoryORM"] = relationship(back_populates="products")
     seller: Mapped["UserORM"] = relationship(back_populates="products")
     reviews: Mapped[list["ReviewORM"]] = relationship(back_populates="product")
-    cart_items: Mapped[list["CartItem"]] = relationship(
+    cart_items: Mapped[list["CartItemORM"]] = relationship(
         back_populates="product", cascade="all, delete-orphan"
     )
-    order_items: Mapped[list["OrderItem"]] = relationship(back_populates="product")
-
-    __table_args__ = (Index("idx_products_tsv_gin", "tsv", postgresql_using="gin"),)
+    order_items: Mapped[list["OrderItemORM"]] = relationship(back_populates="product")

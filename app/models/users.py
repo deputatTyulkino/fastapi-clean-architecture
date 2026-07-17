@@ -4,10 +4,11 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
 from app.domain.models.users import UserRole
+from app.models.orders import OrderORM
 
 if TYPE_CHECKING:
-    from .cart_items import CartItem
-    from .orders import Order
+    from .cart_items import CartItemORM
+    from .orders import OrderORM
     from .products import ProductORM
     from .reviews import ReviewORM
 
@@ -23,9 +24,9 @@ class UserORM(Base):
 
     products: Mapped[list["ProductORM"]] = relationship(back_populates="seller")
     reviews: Mapped[list["ReviewORM"]] = relationship(back_populates="user")
-    cart_items: Mapped[list["CartItem"]] = relationship(
+    cart_items: Mapped[list["CartItemORM"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
-    orders: Mapped[list["Order"]] = relationship(
+    orders: Mapped[list["OrderORM"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
