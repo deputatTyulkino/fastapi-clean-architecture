@@ -8,8 +8,8 @@ from app.domain.models.users import UserRole
 if TYPE_CHECKING:
     from .cart_items import CartItem
     from .orders import Order
-    from .products import Product
-    from .reviews import Review
+    from .products import ProductORM
+    from .reviews import ReviewORM
 
 
 class UserORM(Base):
@@ -21,8 +21,8 @@ class UserORM(Base):
     is_active: Mapped[bool]
     role: Mapped[UserRole]
 
-    products: Mapped[list["Product"]] = relationship(back_populates="seller")
-    reviews: Mapped[list["Review"]] = relationship(back_populates="user")
+    products: Mapped[list["ProductORM"]] = relationship(back_populates="seller")
+    reviews: Mapped[list["ReviewORM"]] = relationship(back_populates="user")
     cart_items: Mapped[list["CartItem"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )

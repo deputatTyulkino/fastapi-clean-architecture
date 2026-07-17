@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from .cart_items import CartItem
     from .categories import CategoryORM
     from .orders import OrderItem
-    from .reviews import Review
+    from .reviews import ReviewORM
     from .users import UserORM
 
 
@@ -65,7 +65,7 @@ class ProductORM(Base):
 
     category: Mapped["CategoryORM"] = relationship(back_populates="products")
     seller: Mapped["UserORM"] = relationship(back_populates="products")
-    reviews: Mapped[list["Review"]] = relationship(back_populates="product")
+    reviews: Mapped[list["ReviewORM"]] = relationship(back_populates="product")
     cart_items: Mapped[list["CartItem"]] = relationship(
         back_populates="product", cascade="all, delete-orphan"
     )
