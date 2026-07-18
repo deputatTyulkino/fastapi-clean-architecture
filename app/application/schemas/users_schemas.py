@@ -19,7 +19,7 @@ class UserSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class UserResponseSchema(BaseModel):
+class ResponseUserSchema(BaseModel):
     user: UserSchema
     access: str
     refresh: str

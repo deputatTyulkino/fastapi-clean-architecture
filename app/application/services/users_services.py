@@ -2,7 +2,7 @@ from app.application.schemas.users_schemas import (
     LoginUserSchema,
     RefreshTokenSchema,
     RegisterUserSchema,
-    UserResponseSchema,
+    ResponseUserSchema,
     UserSchema,
 )
 from app.core.auth import Security
@@ -15,7 +15,7 @@ class UserServices:
         self.uow = uow
         self.security = security
 
-    async def register_user(self, user_data: RegisterUserSchema) -> UserResponseSchema:
+    async def register_user(self, user_data: RegisterUserSchema) -> ResponseUserSchema:
         async with self.uow as uow:
             user = await uow.users.get_by_email(user_data.email)
             if user:
@@ -33,9 +33,9 @@ class UserServices:
             "access": self.security.create_access_token(data_info),
             "refresh": self.security.create_refresh_token(data_info),
         }
-        return UserResponseSchema.model_validate(data)
+        return ResponseUserSchema.model_validate(data)
 
-    async def login_user(self, user_data: LoginUserSchema) -> UserResponseSchema:
+    async def login_user(self, user_data: LoginUserSchema) -> ResponseUserSchema:
         async with self.uow as uow:
             user = await uow.users.get_by_email(user_data.email)
             if (
@@ -52,11 +52,11 @@ class UserServices:
             "access": self.security.create_access_token(data_info),
             "refresh": self.security.create_refresh_token(data_info),
         }
-        return UserResponseSchema.model_validate(data)
+        return ResponseUserSchema.model_validate(data)
 
     async def refresh_token(
         self, refresh_dict_info: RefreshTokenSchema
-    ) -> UserResponseSchema:
+    ) -> ResponseUserSchema:
         message = "Не получилось обновить сессию, авторизуйтесь снова"
         payload = self.security.decode_token(refresh_dict_info.refresh)
         if payload is None:
@@ -73,4 +73,4 @@ class UserServices:
             "access": self.security.create_access_token(data_info),
             "refresh": self.security.create_refresh_token(data_info),
         }
-        return UserResponseSchema.model_validate(data)
+        return ResponseUserSchema.model_validate(data)
