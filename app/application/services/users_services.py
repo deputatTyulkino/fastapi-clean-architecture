@@ -27,7 +27,7 @@ class UserServices:
                 )
             )
             await uow.commit()
-        data_info = {"email": user.email, "role": user.role, "id": user.id}
+        data_info = {"sub": user.email, "role": user.role, "id": user.id}
         data = {
             "user": UserSchema.model_validate(user),
             "access": self.security.create_access_token(data_info),
@@ -46,7 +46,7 @@ class UserServices:
                 )
             ):
                 raise ValueError("Неправильный email или пароль")
-        data_info = {"email": user.email, "role": user.role, "id": user.id}
+        data_info = {"sub": user.email, "role": user.role, "id": user.id}
         data = {
             "user": UserSchema.model_validate(user),
             "access": self.security.create_access_token(data_info),
@@ -67,7 +67,7 @@ class UserServices:
             user = await uow.users.get_by_email(payload["email"])
             if not user or not user.is_active:
                 raise ValueError(message)
-        data_info = {"email": user.email, "role": user.role, "id": user.id}
+        data_info = {"sub": user.email, "role": user.role, "id": user.id}
         data = {
             "user": UserSchema.model_validate(user),
             "access": self.security.create_access_token(data_info),
