@@ -8,16 +8,16 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
-from app.core.depends import get_db
+from app.infrastructure.database.depends import get_db
 from app.infrastructure.models.users import UserORM
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/token")
 
 
 class Security:
-    def __init__(self, settings: type[Settings]):
+    def __init__(self, settings: Settings):
         self.settings = settings
 
     def decode_token(self, token) -> dict | None:
