@@ -2,11 +2,11 @@ from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, Numeric, String, func
+from sqlalchemy import DateTime, Enum, ForeignKey, Numeric, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.core.database import Base
 from app.domain.models.orders import OrderStatus
+from app.infrastructure.database.connect import Base
 
 if TYPE_CHECKING:
     from .products import ProductORM
@@ -20,7 +20,9 @@ class OrderORM(Base):
     user_id: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    status: Mapped[OrderStatus]
+    status: Mapped[OrderStatus] = mapped_column(
+        Enum(OrderStatus, name="status", create_type=True)
+    )
     total_amount: Mapped[Decimal] = mapped_column(
         Numeric(10, 2), default=0, nullable=False
     )

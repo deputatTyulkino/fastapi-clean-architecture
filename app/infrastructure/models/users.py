@@ -1,9 +1,10 @@
 from typing import TYPE_CHECKING
 
+from sqlalchemy import Enum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.core.database import Base
 from app.domain.models.users import UserRole
+from app.infrastructure.database.connect import Base
 
 if TYPE_CHECKING:
     from .cart_items import CartItemORM
@@ -19,7 +20,9 @@ class UserORM(Base):
     email: Mapped[str] = mapped_column(unique=True, index=True, nullable=False)
     hashed_password: Mapped[str] = mapped_column(nullable=False)
     is_active: Mapped[bool]
-    role: Mapped[UserRole]
+    role: Mapped[UserRole] = mapped_column(
+        Enum(UserRole, name="role", create_type=True)
+    )
 
     products: Mapped[list["ProductORM"]] = relationship(back_populates="seller")
     reviews: Mapped[list["ReviewORM"]] = relationship(back_populates="user")
