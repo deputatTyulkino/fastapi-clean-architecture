@@ -18,7 +18,6 @@ router = APIRouter(prefix="/auth", tags=["users"])
     response_model=SuccessResponseSchema[ResponseUserSchema],
     status_code=status.HTTP_201_CREATED,
     summary="Регистрация нового пользователя",
-    description="Создаёт учётную запись с переданными данными и возвращает информацию о пользователе.",
 )
 async def register_user(
     user_data: RegisterUserSchema = Depends(RegisterUserSchema.as_form),
@@ -27,13 +26,21 @@ async def register_user(
     """
     Регистрация нового пользователя.
 
-    Принимает данные формы,
-    создаёт пользователя через сервисный слой и возвращает объект с информацией о созданном пользователе.
+    **Параметры запроса** (form-data):
+    - Все поля, определённые в `RegisterUserSchema` (обычно `email`, `password`, `username` и т.д.).
+
+    **Возвращает**:
+    - `data`: объект `ResponseUserSchema` с информацией о созданном пользователе (включая `id`, `email`, `username` и, возможно, токены).
+
+    **Возможные ошибки**:
+    - `409 Conflict`: пользователь с таким email/username уже существует.
+    - `400 Bad Request`: неверный формат данных (например, слабый пароль, некорректный email) — если такая валидация есть в сервисе.
     """
     try:
         data = await services.register_user(user_data)
         return SuccessResponseSchema(data=data)
     except ValueError as e:
+        # В зависимости от логики сервиса может быть 409 или 400
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
 
 
@@ -42,7 +49,6 @@ async def register_user(
     response_model=SuccessResponseSchema[ResponseUserSchema],
     status_code=status.HTTP_200_OK,
     summary="Аутентификация пользователя",
-    description="Проверяет учётные данные и возвращает токены доступа и обновления.",
 )
 async def login_user(
     user_data: LoginUserSchema = Depends(LoginUserSchema.as_form),
@@ -51,8 +57,15 @@ async def login_user(
     """
     Вход пользователя в систему.
 
-    Ожидает тело запроса с учётными данными.
-    При успешной проверке возвращает информацию о пользователе вместе с токенами.
+    **Параметры запроса** (form-data):
+    - Поля из `LoginUserSchema` (обычно `email`/`username` и `password`).
+
+    **Возвращает**:
+    - `data`: объект `ResponseUserSchema`, содержащий информацию о пользователе и пару токенов (access, refresh).
+
+    **Возможные ошибки**:
+    - `400 Bad Request`: неверные учётные данные (пользователь не найден или пароль не совпадает).
+    - `409 Conflict` / `403 Forbidden`: если учётная запись заблокирована или требует подтверждения (зависит от бизнес-логики).
     """
     try:
         data = await services.login_user(user_data)
@@ -66,7 +79,6 @@ async def login_user(
     response_model=SuccessResponseSchema[ResponseUserSchema],
     status_code=status.HTTP_200_OK,
     summary="Обновление токенов",
-    description="Принимает refresh-токен и возвращает новую пару access/refresh токенов.",
 )
 async def refresh_token(
     refresh_dict_info: RefreshTokenSchema = Depends(RefreshTokenSchema.as_form),
@@ -75,8 +87,15 @@ async def refresh_token(
     """
     Обновление пары токенов.
 
-    Использует переданный refresh-токен для выдачи нового access-токена
-    и refresh-токена, возвращает обновлённую информацию о пользователе.
+    **Параметры запроса** (form-data):
+    - `refresh_token` (строка, обязательное) — действующий refresh-токен.
+
+    **Возвращает**:
+    - `data`: объект `ResponseUserSchema` с обновлёнными токенами (access, refresh) и данными пользователя.
+
+    **Возможные ошибки**:
+    - `400 Bad Request`: передан невалидный, истёкший или отсутствующий refresh-токен.
+    - `401 Unauthorized`: токен недействителен (если сервис выбрасывает более специфичное исключение, можно заменить статус).
     """
     try:
         data = await services.refresh_token(refresh_dict_info)
