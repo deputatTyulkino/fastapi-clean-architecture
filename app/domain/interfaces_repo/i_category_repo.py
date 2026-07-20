@@ -9,11 +9,11 @@ class ICategoryRepo(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    async def get_by_id(self, id: int) -> CategoryDomain:
+    async def get_by_id(self, id: int) -> CategoryDomain | None:
         raise NotImplementedError()
 
     @abstractmethod
-    async def get_by_name(self, name: str) -> CategoryDomain:
+    async def get_by_name(self, name: str) -> CategoryDomain | None:
         raise NotImplementedError()
 
     @abstractmethod
@@ -21,9 +21,11 @@ class ICategoryRepo(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    async def update(self, id: int, category_data: CategoryDomain) -> CategoryDomain:
+    async def update(
+        self, id: int, category_data: CategoryDomain
+    ) -> CategoryDomain | None:
         raise NotImplementedError()
 
     @abstractmethod
-    async def delete(self, id: int) -> int:
+    async def delete(self, id: int) -> int | None:
         raise NotImplementedError()
