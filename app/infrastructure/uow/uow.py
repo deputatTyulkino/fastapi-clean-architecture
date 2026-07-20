@@ -2,6 +2,8 @@ from typing import Self
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.domain.interfaces_repo.i_category_repo import ICategoryRepo
+from app.domain.interfaces_repo.i_product_repo import IProductRepo
 from app.domain.interfaces_repo.i_user_repo import IUserRepo
 from app.domain.interfaces_uow.i_unit_of_work import IUnitOfWork
 from app.infrastructure.repositories.users_repo import UserRepo
@@ -12,6 +14,8 @@ class UnitOfWork(IUnitOfWork):
         self.session_factory: async_sessionmaker[AsyncSession] = session_factory
         self.session: AsyncSession | None = None
         self._users: IUserRepo | None = None
+        self._categories: ICategoryRepo | None = None
+        self._products: IProductRepo | None = None
 
     @property
     def users(self) -> IUserRepo:
@@ -20,6 +24,22 @@ class UnitOfWork(IUnitOfWork):
                 "UnitOfWork не инициализирован. Используйте блок 'async with'"
             )
         return self._users
+
+    @property
+    def categories(self) -> ICategoryRepo:
+        if self._categories is None:
+            raise RuntimeError(
+                "UnitOfWork не инициализирован. Используйте блок 'async with'"
+            )
+        return self._categories
+
+    @property
+    def products(self) -> IProductRepo:
+        if self._products is None:
+            raise RuntimeError(
+                "UnitOfWork не инициализирован. Используйте блок 'async with'"
+            )
+        return self._products
 
     async def __aenter__(self) -> Self:
         self.session = self.session_factory()
