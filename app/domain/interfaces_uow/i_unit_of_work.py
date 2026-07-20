@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
 from typing import Self
 
+from app.domain.interfaces_repo.i_category_repo import ICategoryRepo
+from app.domain.interfaces_repo.i_product_repo import IProductRepo
 from app.domain.interfaces_repo.i_user_repo import IUserRepo
 
 
@@ -8,6 +10,16 @@ class IUnitOfWork(ABC):
     @property
     @abstractmethod
     def users(self) -> IUserRepo:
+        raise NotImplementedError()
+
+    @property
+    @abstractmethod
+    def categories(self) -> ICategoryRepo:
+        raise NotImplementedError()
+
+    @property
+    @abstractmethod
+    def products(self) -> IProductRepo:
         raise NotImplementedError()
 
     @abstractmethod
