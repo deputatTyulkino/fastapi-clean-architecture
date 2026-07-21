@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from app.application.schemas.categories_schemas import (
     CategorySchema,
     CreateCategorySchema,
-    SuccessDelereCategorySchema,
+    SuccessDeleteCategorySchema,
     UpdateCategorySchema,
 )
 from app.application.services.categories_services import CategoryServices
@@ -123,7 +123,7 @@ async def update_category(
 
 @router.delete(
     "/{id}",
-    response_model=SuccessResponseSchema[SuccessDelereCategorySchema],
+    response_model=SuccessResponseSchema[SuccessDeleteCategorySchema],
     status_code=status.HTTP_200_OK,
     summary="Удалить категорию",
 )
@@ -137,7 +137,7 @@ async def delete_category(
     - **id** (path): числовой идентификатор категории.
 
     **Возвращает**:
-    - `data`: объект `SuccessDelereCategorySchema`, содержащий информацию об успешном удалении (например, `id` или статус).
+    - `data`: объект `SuccessDelerteCategorySchema`, содержащий информацию об успешном удалении (например, `id` или статус).
 
     **Возможные ошибки**:
     - `404 Not Found`: категория с указанным `id` не найдена.
