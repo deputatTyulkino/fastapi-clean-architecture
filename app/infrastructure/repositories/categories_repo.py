@@ -1,5 +1,3 @@
-import dataclasses
-
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -55,7 +53,7 @@ class CategoryRepo(ICategoryRepo):
         stmt = (
             update(CategoryORM)
             .filter(CategoryORM.id == id)
-            .values(dataclasses.asdict(category_data))
+            .values(category_data.filtered_none_fields())
             .returning(CategoryORM)
         )
         category = (await self.db.execute(stmt)).scalar_one_or_none()
