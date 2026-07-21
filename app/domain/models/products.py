@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from decimal import Decimal
 
@@ -17,3 +17,8 @@ class ProductDomain:
     image_url: str | None = None
     is_active: bool = True
     rating: Decimal = Decimal(0.0)
+
+    def filtered_none_fields(self):
+        return asdict(
+            self, dict_factory=lambda items: {k: v for k, v in items if v is not None}
+        )
