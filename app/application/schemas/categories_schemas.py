@@ -23,9 +23,16 @@ class CreateCategorySchema(BaseModel):
             raise RequestValidationError(e.errors())
 
 
-class UpdateCategorySchema(CreateCategorySchema):
-    pass
+class UpdateCategorySchema(BaseModel):
+    name: str | None = Field(description="Название категории", min_length=3)
+
+    @classmethod
+    def as_form(cls, name: Annotated[str | None, Form()] = None):
+        try:
+            return cls(name=name)
+        except ValidationError as e:
+            raise RequestValidationError(e.errors())
 
 
-class SuccessDelereCategorySchema(BaseModel):
+class SuccessDeleteCategorySchema(BaseModel):
     detail: str
