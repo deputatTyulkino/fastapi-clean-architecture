@@ -5,6 +5,7 @@ from enum import Enum
 class UserRole(str, Enum):
     seller = "seller"
     buyer = "buyer"
+    admin = "admin"
 
 
 @dataclass
