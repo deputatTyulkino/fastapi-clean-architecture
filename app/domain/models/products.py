@@ -16,7 +16,7 @@ class ProductDomain:
     description: str | None = None
     image_url: str | None = None
     is_active: bool = True
-    rating: Decimal = Decimal(0.0)
+    rating: Decimal = Decimal(0)
 
     def filtered_none_fields(self):
         return asdict(
