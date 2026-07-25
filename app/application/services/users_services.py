@@ -1,19 +1,19 @@
-from app.application.schemas.users_schemas import (
+from app.application.schemas.entities.users_schemas import (
     LoginUserSchema,
     RefreshTokenSchema,
     RegisterUserSchema,
     ResponseUserSchema,
     UserSchema,
 )
-from app.core.auth import Security
-from app.domain.interfaces_uow.i_unit_of_work import IUnitOfWork
+from app.domain.interfaces.uow.i_unit_of_work import IUnitOfWork
+from app.domain.interfaces.utils.i_token_services import ITokenServices
 from app.domain.models.users import UserDomain
 
 
 class UserServices:
-    def __init__(self, uow: IUnitOfWork, security: Security):
+    def __init__(self, uow: IUnitOfWork, token_services: ITokenServices):
         self.uow = uow
-        self.security = security
+        self.token_services = token_services
 
     async def register_user(self, user_data: RegisterUserSchema) -> ResponseUserSchema:
         async with self.uow as uow:
@@ -23,15 +23,17 @@ class UserServices:
             user = await uow.users.create(
                 UserDomain(
                     email=user_data.email,
-                    hashed_password=self.security.hash_password(user_data.password),
+                    hashed_password=self.token_services.hash_password(
+                        user_data.password
+                    ),
                 )
             )
             await uow.commit()
         data_info = {"sub": user.email, "role": user.role, "id": user.id}
         data = {
             "user": UserSchema.model_validate(user),
-            "access": self.security.create_access_token(data_info),
-            "refresh": self.security.create_refresh_token(data_info),
+            "access": self.token_services.create_token(data_info, "access"),
+            "refresh": self.token_services.create_token(data_info, "refresh"),
         }
         return ResponseUserSchema.model_validate(data)
 
@@ -41,7 +43,7 @@ class UserServices:
             if (
                 not user
                 or not user.is_active
-                or not self.security.verify_password(
+                or not self.token_services.verify_password(
                     user_data.password, user.hashed_password
                 )
             ):
@@ -49,8 +51,8 @@ class UserServices:
         data_info = {"sub": user.email, "role": user.role, "id": user.id}
         data = {
             "user": UserSchema.model_validate(user),
-            "access": self.security.create_access_token(data_info),
-            "refresh": self.security.create_refresh_token(data_info),
+            "access": self.token_services.create_token(data_info, "access"),
+            "refresh": self.token_services.create_token(data_info, "refresh"),
         }
         return ResponseUserSchema.model_validate(data)
 
@@ -58,7 +60,7 @@ class UserServices:
         self, refresh_dict_info: RefreshTokenSchema
     ) -> ResponseUserSchema:
         message = "Не получилось обновить сессию, авторизуйтесь снова"
-        payload = self.security.decode_token(refresh_dict_info.refresh)
+        payload = self.token_services.decode_token(refresh_dict_info.refresh)
         if payload is None:
             raise ValueError(message)
         if payload.get("email") is None or payload.get("token_type") != "refresh":
@@ -70,7 +72,7 @@ class UserServices:
         data_info = {"sub": user.email, "role": user.role, "id": user.id}
         data = {
             "user": UserSchema.model_validate(user),
-            "access": self.security.create_access_token(data_info),
-            "refresh": self.security.create_refresh_token(data_info),
+            "access": self.token_services.create_token(data_info, "access"),
+            "refresh": self.token_services.create_token(data_info, "refresh"),
         }
         return ResponseUserSchema.model_validate(data)
