@@ -1,14 +1,16 @@
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.application.schemas.users_schemas import (
+from app.application.schemas.entities.users_schemas import (
     LoginUserSchema,
     RefreshTokenSchema,
     RegisterUserSchema,
     ResponseUserSchema,
 )
+from app.application.schemas.utils.success_response_schema import SuccessResponseSchema
 from app.application.services.users_services import UserServices
-from app.core.success_response_schema import SuccessResponseSchema
-from app.presentation.depends.users_services import get_users_servcies
+from app.presentation.depends.entities.users_services import get_users_servcies
 
 router = APIRouter(prefix="/auth", tags=["users"])
 
@@ -20,8 +22,8 @@ router = APIRouter(prefix="/auth", tags=["users"])
     summary="Регистрация нового пользователя",
 )
 async def register_user(
-    user_data: RegisterUserSchema = Depends(RegisterUserSchema.as_form),
-    services: UserServices = Depends(get_users_servcies),
+    user_data: Annotated[RegisterUserSchema, Depends(RegisterUserSchema.as_form)],
+    services: Annotated[UserServices, Depends(get_users_servcies)],
 ):
     """
     Регистрация нового пользователя.
@@ -51,8 +53,8 @@ async def register_user(
     summary="Аутентификация пользователя",
 )
 async def login_user(
-    user_data: LoginUserSchema = Depends(LoginUserSchema.as_form),
-    services: UserServices = Depends(get_users_servcies),
+    user_data: Annotated[LoginUserSchema, Depends(LoginUserSchema.as_form)],
+    services: Annotated[UserServices, Depends(get_users_servcies)],
 ):
     """
     Вход пользователя в систему.
@@ -81,8 +83,10 @@ async def login_user(
     summary="Обновление токенов",
 )
 async def refresh_token(
-    refresh_dict_info: RefreshTokenSchema = Depends(RefreshTokenSchema.as_form),
-    services: UserServices = Depends(get_users_servcies),
+    refresh_dict_info: Annotated[
+        RefreshTokenSchema, Depends(RefreshTokenSchema.as_form)
+    ],
+    services: Annotated[UserServices, Depends(get_users_servcies)],
 ):
     """
     Обновление пары токенов.
