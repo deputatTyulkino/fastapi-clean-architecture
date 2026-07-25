@@ -1,7 +1,7 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain.interfaces_repo.i_user_repo import IUserRepo
+from app.domain.interfaces.repositories.i_user_repo import IUserRepo
 from app.domain.models.users import UserDomain
 from app.infrastructure.models.users import UserORM
 

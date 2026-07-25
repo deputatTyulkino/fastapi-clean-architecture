@@ -1,7 +1,7 @@
-from sqlalchemy import select, update
+from sqlalchemy import exists, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain.interfaces_repo.i_category_repo import ICategoryRepo
+from app.domain.interfaces.repositories.i_category_repo import ICategoryRepo
 from app.domain.models.categories import CategoryDomain
 from app.infrastructure.models.categories import CategoryORM
 
@@ -41,6 +41,14 @@ class CategoryRepo(ICategoryRepo):
             return None
         return self._to_domain_model(data)
 
+    async def exists_by_id(self, id: int) -> bool:
+        stmt = select(exists().where(CategoryORM.id == id, CategoryORM.is_active))
+        return bool(await self.db.scalar(stmt))
+
+    async def exists_by_name(self, name: str) -> bool:
+        stmt = select(exists().where(CategoryORM.name == name, CategoryORM.is_active))
+        return bool(await self.db.scalar(stmt))
+
     async def create(self, category_data: CategoryDomain) -> CategoryDomain:
         category = self._to_orm_model(category_data)
         self.db.add(category)
@@ -69,6 +77,4 @@ class CategoryRepo(ICategoryRepo):
             .returning(CategoryORM.id)
         )
         cat_id = (await self.db.execute(stmt)).scalar_one_or_none()
-        if cat_id is None:
-            return None
         return cat_id
