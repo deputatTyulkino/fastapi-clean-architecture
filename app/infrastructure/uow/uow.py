@@ -2,10 +2,12 @@ from typing import Self
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.domain.interfaces_repo.i_category_repo import ICategoryRepo
-from app.domain.interfaces_repo.i_product_repo import IProductRepo
-from app.domain.interfaces_repo.i_user_repo import IUserRepo
-from app.domain.interfaces_uow.i_unit_of_work import IUnitOfWork
+from app.domain.interfaces.repositories.i_category_repo import ICategoryRepo
+from app.domain.interfaces.repositories.i_product_repo import IProductRepo
+from app.domain.interfaces.repositories.i_user_repo import IUserRepo
+from app.domain.interfaces.uow.i_unit_of_work import IUnitOfWork
+from app.infrastructure.repositories.categories_repo import CategoryRepo
+from app.infrastructure.repositories.products_repo import ProductRepo
 from app.infrastructure.repositories.users_repo import UserRepo
 
 
@@ -44,6 +46,8 @@ class UnitOfWork(IUnitOfWork):
     async def __aenter__(self) -> Self:
         self.session = self.session_factory()
         self._users = UserRepo(self.session)
+        self._categories = CategoryRepo(self.session)
+        self._products = ProductRepo(self.session)
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
