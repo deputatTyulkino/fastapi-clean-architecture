@@ -1,10 +1,10 @@
-from app.application.schemas.categories_schemas import (
+from app.application.schemas.entities.categories_schemas import (
     CategorySchema,
     CreateCategorySchema,
-    SuccessDeleteCategorySchema,
     UpdateCategorySchema,
 )
-from app.domain.interfaces_uow.i_unit_of_work import IUnitOfWork
+from app.application.schemas.utils.success_delete_schema import SuccessDeleteSchema
+from app.domain.interfaces.uow.i_unit_of_work import IUnitOfWork
 from app.domain.models.categories import CategoryDomain
 
 
@@ -54,13 +54,11 @@ class CategoryServices:
             await uow.commit()
         return CategorySchema.model_validate(updated_category)
 
-    async def delete_category(self, id: int) -> SuccessDeleteCategorySchema:
+    async def delete_category(self, id: int) -> SuccessDeleteSchema:
         async with self.uow as uow:
             category = await uow.categories.get_by_id(id)
             if category is None:
                 raise ValueError(f"Категории с id {id} не существует")
             cat_id = await uow.categories.delete(id)
             await uow.commit()
-        return SuccessDeleteCategorySchema(
-            detail=f"Категория с ID {cat_id} успешно удалена"
-        )
+        return SuccessDeleteSchema(detail=f"Категория с ID {cat_id} успешно удалена")
