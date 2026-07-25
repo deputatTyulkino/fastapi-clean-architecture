@@ -1,8 +1,8 @@
-"""empty message
+"""Обновление поля role у пользователей
 
-Revision ID: 1c6e7dfd27ee
-Revises: ed715acde3bb
-Create Date: 2026-03-30 18:45:40.645961
+Revision ID: 752dfb27ed16
+Revises: 77e2228ce6ba
+Create Date: 2026-07-25 05:10:57.274871
 
 """
 from typing import Sequence, Union
@@ -12,8 +12,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '1c6e7dfd27ee'
-down_revision: Union[str, Sequence[str], None] = 'ed715acde3bb'
+revision: str = '752dfb27ed16'
+down_revision: Union[str, Sequence[str], None] = '77e2228ce6ba'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
