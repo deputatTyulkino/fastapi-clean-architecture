@@ -1,26 +1,32 @@
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.application.schemas.categories_schemas import (
+from app.application.schemas.entities.categories_schemas import (
     CategorySchema,
     CreateCategorySchema,
-    SuccessDeleteCategorySchema,
     UpdateCategorySchema,
 )
+from app.application.schemas.utils.success_delete_schema import SuccessDeleteSchema
+from app.application.schemas.utils.success_response_schema import SuccessResponseSchema
 from app.application.services.categories_services import CategoryServices
-from app.core.success_response_schema import SuccessResponseSchema
-from app.presentation.depends.categories_services import get_categories_services
+from app.presentation.depends.entities.categories_services import (
+    get_categories_services,
+)
+from app.presentation.depends.utils.check_user import get_current_admin
 
-router = APIRouter(prefix="/categories", tags=["categories"])
+router = APIRouter(prefix="/categories")
 
 
 @router.get(
     "/",
+    tags=["categories"],
     response_model=SuccessResponseSchema[list[CategorySchema]],
     status_code=status.HTTP_200_OK,
     summary="Получить все категории",
 )
 async def get_all_categories(
-    services: CategoryServices = Depends(get_categories_services),
+    services: Annotated[CategoryServices, Depends(get_categories_services)],
 ):
     """
     Получить список всех категорий.
@@ -36,13 +42,14 @@ async def get_all_categories(
 
 @router.get(
     "/{id}",
+    tags=["categories"],
     response_model=SuccessResponseSchema[CategorySchema],
     status_code=status.HTTP_200_OK,
     summary="Получить категорию по ID",
 )
 async def get_category_by_id(
     id: int,
-    services: CategoryServices = Depends(get_categories_services),
+    services: Annotated[CategoryServices, Depends(get_categories_services)],
 ):
     """
     Получить категорию по её идентификатору.
@@ -64,13 +71,17 @@ async def get_category_by_id(
 
 @router.post(
     "/",
+    tags=["categories"],
     response_model=SuccessResponseSchema[CategorySchema],
     status_code=status.HTTP_201_CREATED,
     summary="Создать новую категорию",
+    dependencies=[Depends(get_current_admin)],
 )
 async def create_category(
-    category_data: CreateCategorySchema = Depends(CreateCategorySchema.as_form),
-    services: CategoryServices = Depends(get_categories_services),
+    category_data: Annotated[
+        CreateCategorySchema, Depends(CreateCategorySchema.as_form)
+    ],
+    services: Annotated[CategoryServices, Depends(get_categories_services)],
 ):
     """
     Создать новую категорию.
@@ -93,14 +104,18 @@ async def create_category(
 
 @router.patch(
     "/{id}",
+    tags=["categories"],
     response_model=SuccessResponseSchema[CategorySchema],
     status_code=status.HTTP_200_OK,
     summary="Частично обновить категорию",
+    dependencies=[Depends(get_current_admin)],
 )
 async def update_category(
     id: int,
-    category_data: UpdateCategorySchema = Depends(UpdateCategorySchema.as_form),
-    services: CategoryServices = Depends(get_categories_services),
+    category_data: Annotated[
+        UpdateCategorySchema, Depends(UpdateCategorySchema.as_form)
+    ],
+    services: Annotated[CategoryServices, Depends(get_categories_services)],
 ):
     """
     Частично обновить категорию по идентификатору.
@@ -123,13 +138,15 @@ async def update_category(
 
 @router.delete(
     "/{id}",
-    response_model=SuccessResponseSchema[SuccessDeleteCategorySchema],
+    tags=["categories"],
+    response_model=SuccessResponseSchema[SuccessDeleteSchema],
     status_code=status.HTTP_200_OK,
     summary="Удалить категорию",
+    dependencies=[Depends(get_current_admin)],
 )
 async def delete_category(
     id: int,
-    services: CategoryServices = Depends(get_categories_services),
+    services: Annotated[CategoryServices, Depends(get_categories_services)],
 ):
     """
     Удалить категорию по идентификатору.
