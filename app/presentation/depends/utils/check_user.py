@@ -38,18 +38,17 @@ async def get_current_user(
 def get_current_seller(
     user: Annotated[UserDomain, Depends(get_current_user)],
 ) -> UserDomain:
-    if user.role != "seller":
+    if not user.is_seller:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав"
         )
     return user
 
 
-def get_current_admin(
+def require_admin(
     user: Annotated[UserDomain, Depends(get_current_user)],
-) -> UserDomain:
-    if user.role != "admin":
+) -> None:
+    if not user.is_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав"
         )
-    return user

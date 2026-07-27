@@ -13,7 +13,7 @@ from app.application.services.categories_services import CategoryServices
 from app.presentation.depends.entities.categories_services import (
     get_categories_services,
 )
-from app.presentation.depends.utils.check_user import get_current_admin
+from app.presentation.depends.utils.check_user import require_admin
 
 router = APIRouter(prefix="/categories")
 
@@ -75,7 +75,7 @@ async def get_category_by_id(
     response_model=SuccessResponseSchema[CategorySchema],
     status_code=status.HTTP_201_CREATED,
     summary="Создать новую категорию",
-    dependencies=[Depends(get_current_admin)],
+    dependencies=[Depends(require_admin)],
 )
 async def create_category(
     category_data: Annotated[
@@ -108,7 +108,7 @@ async def create_category(
     response_model=SuccessResponseSchema[CategorySchema],
     status_code=status.HTTP_200_OK,
     summary="Частично обновить категорию",
-    dependencies=[Depends(get_current_admin)],
+    dependencies=[Depends(require_admin)],
 )
 async def update_category(
     id: int,
@@ -142,7 +142,7 @@ async def update_category(
     response_model=SuccessResponseSchema[SuccessDeleteSchema],
     status_code=status.HTTP_200_OK,
     summary="Удалить категорию",
-    dependencies=[Depends(get_current_admin)],
+    dependencies=[Depends(require_admin)],
 )
 async def delete_category(
     id: int,
