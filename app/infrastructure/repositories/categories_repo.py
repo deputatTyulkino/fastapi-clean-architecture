@@ -1,9 +1,11 @@
 from sqlalchemy import exists, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased, joinedload
 
 from app.domain.interfaces.repositories.i_category_repo import ICategoryRepo
 from app.domain.models.categories import CategoryDomain
 from app.infrastructure.models.categories import CategoryORM
+from app.infrastructure.models.products import ProductORM
 
 
 class CategoryRepo(ICategoryRepo):
@@ -35,6 +37,20 @@ class CategoryRepo(ICategoryRepo):
     async def get_by_name(self, name: str) -> CategoryDomain | None:
         query = select(CategoryORM).filter(
             CategoryORM.name == name, CategoryORM.is_active
+        )
+        data = (await self.db.execute(query)).scalar_one_or_none()
+        if data is None:
+            return None
+        return self._to_domain_model(data)
+
+    async def get_by_product_id(self, product_id: int) -> CategoryDomain | None:
+        c = aliased(CategoryORM)
+        p = aliased(ProductORM)
+        query = (
+            select(c)
+            .select_from(p)
+            .filter(p.id == product_id)
+            .options(joinedload(p.category))
         )
         data = (await self.db.execute(query)).scalar_one_or_none()
         if data is None:

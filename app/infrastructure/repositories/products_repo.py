@@ -2,10 +2,13 @@ from typing import Any
 
 from sqlalchemy import ColumnElement, exists, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import load_only
 
 from app.domain.interfaces.repositories.i_product_repo import IProductRepo
-from app.domain.models.products import ProductDomain
+from app.domain.models.products import (
+    MainProductsDomain,
+    ProductDomain,
+)
 from app.infrastructure.models.products import ProductORM
 
 
@@ -45,17 +48,23 @@ class ProductRepo(IProductRepo):
             updated_at=product.updated_at,
         )
 
+    def _to_domain_catalog_model(self, product: ProductORM) -> MainProductsDomain:
+        return MainProductsDomain(
+            id=product.id,
+            name=product.name,
+            price=product.price,
+            image_url=product.image_url,
+            rating=product.rating,
+        )
+
     async def get_all(
         self, params: dict[str, Any]
-    ) -> tuple[list[ProductDomain], int, int, int]:
+    ) -> tuple[list[MainProductsDomain], int, int, int]:
         filters: list[ColumnElement[bool]] = [ProductORM.is_active.is_(True)]
         search = params.get("search")
-        category_id = params.get("category_id")
         seller_id = params.get("seller_id")
         min_price = params.get("min_price")
         max_price = params.get("max_price")
-        if category_id is not None:
-            filters.append(ProductORM.category_id == category_id)
         if seller_id is not None:
             filters.append(ProductORM.seller_id == seller_id)
         if min_price is not None:
@@ -81,42 +90,81 @@ class ProductRepo(IProductRepo):
         if rank_col is not None:
             products_stmt = (
                 select(ProductORM, rank_col)
-                .options(joinedload(ProductORM.category, ProductORM.seller))
+                .options(
+                    load_only(
+                        ProductORM.id,
+                        ProductORM.name,
+                        ProductORM.price,
+                        ProductORM.image_url,
+                        ProductORM.rating,
+                    )
+                )
                 .filter(*filters)
                 .order_by(rank_col.desc(), ProductORM.id)
                 .offset(params["offset"])
                 .limit(params["limit"])
             )
             products_stmt_res = (await self.db.scalars(products_stmt)).all()
-            products = [self._to_domain_model(pr[0]) for pr in products_stmt_res]
+            products = [
+                self._to_domain_catalog_model(pr[0]) for pr in products_stmt_res
+            ]
         else:
             products_stmt = (
                 select(ProductORM)
-                .options(joinedload(ProductORM.category, ProductORM.seller))
+                .options(
+                    load_only(
+                        ProductORM.id,
+                        ProductORM.name,
+                        ProductORM.price,
+                        ProductORM.image_url,
+                        ProductORM.rating,
+                    )
+                )
                 .filter(*filters)
                 .order_by(ProductORM.id)
                 .offset(params["offset"])
                 .limit(params["limit"])
             )
             products_stmt_res = (await self.db.scalars(products_stmt)).all()
-            products = [self._to_domain_model(pr) for pr in products_stmt_res]
+            products = [self._to_domain_catalog_model(pr) for pr in products_stmt_res]
         return products, total, params["page"], params["limit"]
 
-    async def get_by_category(self, id: int) -> list[ProductDomain]:
+    async def get_by_category(self, id: int) -> list[MainProductsDomain]:
         stmt = (
             select(ProductORM)
             .filter(ProductORM.category_id == id, ProductORM.is_active)
-            .options(joinedload(ProductORM.category, ProductORM.seller))
+            .options(
+                load_only(
+                    ProductORM.id,
+                    ProductORM.name,
+                    ProductORM.price,
+                    ProductORM.image_url,
+                    ProductORM.rating,
+                )
+            )
         )
         products = (await self.db.scalars(stmt)).all()
-        return [self._to_domain_model(product) for product in products]
+        return [self._to_domain_catalog_model(product) for product in products]
 
-    async def get_by_id(self, id: int) -> ProductDomain | None:
+    async def get_by_seller(self, id: int) -> list[MainProductsDomain]:
         stmt = (
             select(ProductORM)
-            .filter(ProductORM.id == id, ProductORM.is_active)
-            .options(joinedload(ProductORM.category, ProductORM.seller))
+            .filter(ProductORM.seller_id == id, ProductORM.is_active)
+            .options(
+                load_only(
+                    ProductORM.id,
+                    ProductORM.name,
+                    ProductORM.price,
+                    ProductORM.image_url,
+                    ProductORM.rating,
+                )
+            )
         )
+        products = (await self.db.scalars(stmt)).all()
+        return [self._to_domain_catalog_model(product) for product in products]
+
+    async def get_by_id(self, id: int) -> ProductDomain | None:
+        stmt = select(ProductORM).filter(ProductORM.id == id, ProductORM.is_active)
         product = (await self.db.execute(stmt)).scalar_one_or_none()
         if product is None:
             return None

@@ -1,9 +1,10 @@
 from app.application.schemas.entities.products_schemas import (
     CreateProductSchema,
+    MainInfoProductSchema,
     ProductSchema,
     UpdateProductSchema,
 )
-from app.application.schemas.utils.query_params_schema import QueryParamsSchema
+from app.application.schemas.utils.query_params_schema import QueryParamsProductsSchema
 from app.application.schemas.utils.success_delete_schema import SuccessDeleteSchema
 from app.application.schemas.utils.success_response_schema import (
     SuccessPaginatedResponseSchema,
@@ -20,19 +21,20 @@ class ProductServices:
         self.image_storage = image_storage
 
     async def get_all_products(
-        self, query_params: QueryParamsSchema
-    ) -> SuccessPaginatedResponseSchema[ProductSchema]:
+        self, query_params: QueryParamsProductsSchema
+    ) -> SuccessPaginatedResponseSchema[MainInfoProductSchema]:
         filters = query_params.model_dump(exclude_unset=True)
-        category_id = filters.get("category_id")
-        # seller_id = filters.get("seller_id")
+        seller_id = filters.get("seller_id")
         async with self.uow as uow:
-            if category_id is not None:
-                exists_category = await uow.categories.exists_by_id(category_id)
-                if not exists_category:
-                    raise ValueError(f"Категории с ID {category_id} не существует")
+            if seller_id is not None:
+                exists_seller = await uow.sellers.exists_by_id(seller_id)
+                if not exists_seller:
+                    raise ValueError(f"Продавца с ID {seller_id} не существует")
             products, total, page, limit = await uow.products.get_all(filters)
-        return SuccessPaginatedResponseSchema[ProductSchema](
-            items=[ProductSchema.model_validate(product) for product in products],
+        return SuccessPaginatedResponseSchema[MainInfoProductSchema](
+            items=[
+                MainInfoProductSchema.model_validate(product) for product in products
+            ],
             total=total,
             page=page,
             limit=limit,
@@ -41,30 +43,26 @@ class ProductServices:
     async def get_product_by_id(self, id: int) -> ProductSchema:
         async with self.uow as uow:
             product = await uow.products.get_by_id(id)
-        if product is None:
-            raise ValueError(f"Товара с ID {id} не существует")
+            if product is None:
+                raise ValueError(f"Товара с ID {id} не существует")
         return ProductSchema.model_validate(product)
 
-    async def get_products_by_category(self, category_id: int) -> list[ProductSchema]:
+    async def get_products_by_category(
+        self, category_id: int
+    ) -> list[MainInfoProductSchema]:
         async with self.uow as uow:
-            category = await uow.categories.get_by_id(category_id)
-            if category is None:
+            exists_category = await uow.categories.exists_by_id(category_id)
+            if not exists_category:
                 raise ValueError(f"Категории с ID {category_id} не существует")
             products = await uow.products.get_by_category(category_id)
-        return (
-            [ProductSchema.model_validate(product) for product in products]
-            if products
-            else []
-        )
+        return [MainInfoProductSchema.model_validate(product) for product in products]
 
     async def create_product(
         self, product_data: CreateProductSchema, image: FileDomain, seller_id: int
     ) -> ProductSchema:
         async with self.uow as uow:
-            exists_category = await uow.categories.exists_by_id(
-                product_data.category_id
-            )
-            if not exists_category:
+            category = await uow.categories.get_by_id(product_data.category_id)
+            if category is None:
                 raise ValueError(
                     f"Категории с ID {product_data.category_id} не существует"
                 )
@@ -124,12 +122,14 @@ class ProductServices:
             await uow.commit()
         return ProductSchema.model_validate(updated_product)
 
-    async def delete_product(self, id: int, user_id: int) -> SuccessDeleteSchema:
+    async def delete_product(
+        self, id: int, user_id: int, is_admin: bool | None
+    ) -> SuccessDeleteSchema:
         async with self.uow as uow:
             product = await uow.products.get_by_id(id)
             if product is None:
                 raise ValueError(f"Товара с таким ID {id} не существует")
-            if product.seller_id != user_id:
+            if product.seller_id != user_id and not is_admin:
                 raise ValueError("У вас нет прав на удаление этого товара")
             if product.image_url:
                 await self.image_storage.remove_image(product.image_url)

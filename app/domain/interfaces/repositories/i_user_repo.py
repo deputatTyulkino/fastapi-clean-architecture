@@ -12,3 +12,10 @@ class IUserRepo(ABC):
     async def create(self, user: UserDomain) -> UserDomain:
         raise NotImplementedError()
 
+    @abstractmethod
+    async def exists_by_id(self, id: int) -> bool:
+        raise NotImplementedError()
+
+    @abstractmethod
+    async def get_by_id(self, id: int) -> UserDomain | None:
+        raise NotImplementedError()

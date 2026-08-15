@@ -28,6 +28,16 @@ class CategoryServices:
             raise ValueError(f"Категории с ID {id} не существует")
         return CategorySchema.model_validate(category)
 
+    async def get_category_by_product(self, product_id: int) -> CategorySchema:
+        async with self.uow as uow:
+            exists_product = await uow.products.exists_by_id(product_id)
+            if not exists_product:
+                raise ValueError(f"Продукта с ID {product_id} не существует")
+            category = await uow.categories.get_by_product_id(product_id)
+            if category is None:
+                raise ValueError("Категория не найдена")
+        return CategorySchema.model_validate(category)
+
     async def create_category(
         self, category_data: CreateCategorySchema
     ) -> CategorySchema:

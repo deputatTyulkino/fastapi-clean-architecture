@@ -1,14 +1,17 @@
 from abc import ABC, abstractmethod
 from typing import Any
 
-from app.domain.models.products import ProductDomain
+from app.domain.models.products import (
+    MainProductsDomain,
+    ProductDomain,
+)
 
 
 class IProductRepo(ABC):
     @abstractmethod
     async def get_all(
         self, params: dict[str, Any]
-    ) -> tuple[list[ProductDomain], int, int, int]:
+    ) -> tuple[list[MainProductsDomain], int, int, int]:
         raise NotImplementedError()
 
     @abstractmethod
@@ -24,7 +27,11 @@ class IProductRepo(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    async def get_by_category(self, id: int) -> list[ProductDomain]:
+    async def get_by_category(self, id: int) -> list[MainProductsDomain]:
+        raise NotImplementedError()
+
+    @abstractmethod
+    async def get_by_seller(self, id: int) -> list[MainProductsDomain]:
         raise NotImplementedError()
 
     @abstractmethod

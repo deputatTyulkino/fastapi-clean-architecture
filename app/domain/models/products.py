@@ -22,3 +22,15 @@ class ProductDomain:
         return asdict(
             self, dict_factory=lambda items: {k: v for k, v in items if v is not None}
         )
+
+    def as_dict(self):
+        return asdict(self)
+
+
+@dataclass
+class MainProductsDomain:
+    id: int
+    name: str
+    price: Decimal
+    rating: Decimal
+    image_url: str | None = None

@@ -25,6 +25,10 @@ class ICategoryRepo(ABC):
         raise NotImplementedError()
 
     @abstractmethod
+    async def get_by_product_id(self, product_id: int) -> CategoryDomain | None:
+        raise NotImplementedError()
+
+    @abstractmethod
     async def create(self, category_data: CategoryDomain) -> CategoryDomain:
         raise NotImplementedError()
 

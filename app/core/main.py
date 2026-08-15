@@ -4,6 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from app.core.lifespan import lifespan
 from app.presentation.routers.categories import router as categories_router
 from app.presentation.routers.products import router as products_router
+from app.presentation.routers.sellers import router as sellers_router
 from app.presentation.routers.users import router as users_router
 
 app = FastAPI(title="FastAPI Интернет-магазин", lifespan=lifespan)
@@ -11,6 +12,7 @@ app = FastAPI(title="FastAPI Интернет-магазин", lifespan=lifespan
 app.include_router(users_router)
 app.include_router(categories_router)
 app.include_router(products_router)
+app.include_router(sellers_router)
 
 
 app.mount("/media", StaticFiles(directory="media"), name="media")

@@ -3,6 +3,8 @@ from typing import Self
 
 from app.domain.interfaces.repositories.i_category_repo import ICategoryRepo
 from app.domain.interfaces.repositories.i_product_repo import IProductRepo
+from app.domain.interfaces.repositories.i_review_repo import IReviewsRepo
+from app.domain.interfaces.repositories.i_seller_repo import ISellerRepo
 from app.domain.interfaces.repositories.i_user_repo import IUserRepo
 
 
@@ -20,6 +22,16 @@ class IUnitOfWork(ABC):
     @property
     @abstractmethod
     def products(self) -> IProductRepo:
+        raise NotImplementedError()
+
+    @property
+    @abstractmethod
+    def reviews(self) -> IReviewsRepo:
+        raise NotImplementedError()
+
+    @property
+    @abstractmethod
+    def sellers(self) -> ISellerRepo:
         raise NotImplementedError()
 
     @abstractmethod

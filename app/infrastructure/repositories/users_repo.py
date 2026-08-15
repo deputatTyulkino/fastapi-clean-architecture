@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.interfaces.repositories.i_user_repo import IUserRepo
@@ -40,3 +40,14 @@ class UserRepo(IUserRepo):
         self.db.add(new_user)
         await self.db.flush()
         return self._to_domain_model(new_user)
+
+    async def exists_by_id(self, id: int) -> bool:
+        stmt = select(exists().where(UserORM.id == id, UserORM.is_active))
+        return bool(await self.db.scalar(stmt))
+
+    async def get_by_id(self, id: int) -> UserDomain | None:
+        query = select(UserORM).filter_by(id=id)
+        user = (await self.db.execute(query)).scalar_one_or_none()
+        if user is None:
+            return None
+        return self._to_domain_model(user)

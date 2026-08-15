@@ -6,23 +6,24 @@ from fastapi import Form
 from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from app.application.schemas.entities.categories_schemas import CategorySchema
-from app.application.schemas.entities.users_schemas import UserSchema
 
-
-class ProductSchema(BaseModel):
+class MainInfoProductSchema(BaseModel):
     id: int
     name: str
-    description: str
     price: Decimal
     image_url: str
+    rating: Decimal
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ProductSchema(MainInfoProductSchema):
+    description: str
     stock: int
     is_active: bool
-    rating: Decimal
     created_at: datetime
     updated_at: datetime
-    category: CategorySchema
-    seller: UserSchema
+    category_id: int
+    seller_id: int
     model_config = ConfigDict(from_attributes=True)
 
 

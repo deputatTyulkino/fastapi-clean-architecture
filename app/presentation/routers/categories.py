@@ -7,12 +7,15 @@ from app.application.schemas.entities.categories_schemas import (
     CreateCategorySchema,
     UpdateCategorySchema,
 )
+from app.application.schemas.entities.products_schemas import MainInfoProductSchema
 from app.application.schemas.utils.success_delete_schema import SuccessDeleteSchema
 from app.application.schemas.utils.success_response_schema import SuccessResponseSchema
 from app.application.services.categories_services import CategoryServices
+from app.application.services.products_services import ProductServices
 from app.presentation.depends.entities.categories_services import (
     get_categories_services,
 )
+from app.presentation.depends.entities.products_services import get_product_services
 from app.presentation.depends.utils.check_user import require_admin
 
 router = APIRouter(prefix="/categories")
@@ -64,6 +67,30 @@ async def get_category_by_id(
     """
     try:
         data = await services.get_category_by_id(id)
+        return SuccessResponseSchema(data=data)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.get(
+    "/{category_id}/products",
+    tags=["products"],
+    response_model=SuccessResponseSchema[list[MainInfoProductSchema]],
+    status_code=status.HTTP_200_OK,
+    summary="Продукты по категории",
+)
+async def get_products_by_category(
+    category_id: int,
+    services: Annotated[ProductServices, Depends(get_product_services)],
+):
+    """
+    Получение продуктов по идентификатору категории.
+
+    - **category_id**: идентификатор категории.
+    Если категория не найдена или не содержит продуктов – возвращается 404.
+    """
+    try:
+        data = await services.get_products_by_category(category_id)
         return SuccessResponseSchema(data=data)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
