@@ -1,8 +1,8 @@
-"""update all models
+"""create models
 
-Revision ID: 77e2228ce6ba
+Revision ID: 511e1967fdc2
 Revises: 
-Create Date: 2026-07-20 02:55:15.108282
+Create Date: 2026-08-16 21:50:00.455740
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision: str = '77e2228ce6ba'
+revision: str = '511e1967fdc2'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -32,7 +32,7 @@ def upgrade() -> None:
     sa.Column('email', sa.String(), nullable=False),
     sa.Column('hashed_password', sa.String(), nullable=False),
     sa.Column('is_active', sa.Boolean(), nullable=False),
-    sa.Column('role', sa.Enum('seller', 'buyer', name='role'), nullable=False),
+    sa.Column('role', sa.Enum('buyer', 'admin', name='role'), nullable=False),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_users_email'), 'users', ['email'], unique=True)
@@ -69,6 +69,25 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index('idx_products_tsv_gin', 'products', ['tsv'], unique=False, postgresql_using='gin')
+    op.create_table('sellers',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('user_id', sa.Integer(), nullable=False),
+    sa.Column('description', sa.Text(), nullable=True),
+    sa.Column('store_name', sa.String(), nullable=False),
+    sa.Column('logo_url', sa.String(), nullable=True),
+    sa.Column('banner_url', sa.String(), nullable=True),
+    sa.Column('legal_name', sa.String(), nullable=True),
+    sa.Column('tax_id', sa.String(), nullable=True),
+    sa.Column('phone', sa.String(), nullable=True),
+    sa.Column('status', sa.Enum('pending', 'active', 'suspended', 'rejected', name='seller_status'), nullable=False),
+    sa.Column('rating', sa.Numeric(precision=2, scale=1), nullable=False),
+    sa.Column('reviews_count', sa.Integer(), nullable=False),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+    sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+    sa.Column('is_active', sa.Boolean(), nullable=False),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
+    sa.PrimaryKeyConstraint('id')
+    )
     op.create_table('cart_items',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('user_id', sa.Integer(), nullable=False),
@@ -122,6 +141,7 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_cart_items_user_id'), table_name='cart_items')
     op.drop_index(op.f('ix_cart_items_product_id'), table_name='cart_items')
     op.drop_table('cart_items')
+    op.drop_table('sellers')
     op.drop_index('idx_products_tsv_gin', table_name='products', postgresql_using='gin')
     op.drop_table('products')
     op.drop_index(op.f('ix_orders_user_id'), table_name='orders')

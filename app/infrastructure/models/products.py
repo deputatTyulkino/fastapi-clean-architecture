@@ -40,7 +40,7 @@ class ProductORM(Base):
     category_id: Mapped[int] = mapped_column(
         ForeignKey("categories.id"), nullable=False
     )
-    seller_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    seller_id: Mapped[int] = mapped_column(ForeignKey("sellers.id"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
