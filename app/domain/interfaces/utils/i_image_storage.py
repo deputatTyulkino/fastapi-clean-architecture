@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 from app.domain.models.files import FileDomain
 
 
-class IImageStorage(ABC):
+class IImageServices(ABC):
     @abstractmethod
     async def save_image(self, file: FileDomain, file_slug: str) -> str:
         raise NotImplementedError()

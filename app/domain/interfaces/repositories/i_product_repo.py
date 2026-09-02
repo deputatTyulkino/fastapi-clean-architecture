@@ -1,4 +1,6 @@
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
+from decimal import Decimal
 from typing import Any
 
 from app.domain.models.products import (
@@ -35,6 +37,10 @@ class IProductRepo(ABC):
         raise NotImplementedError()
 
     @abstractmethod
+    async def get_rating_by_id(self, id: int) -> Decimal:
+        raise NotImplementedError()
+
+    @abstractmethod
     async def create(self, product_data: ProductDomain) -> ProductDomain:
         raise NotImplementedError()
 
@@ -42,6 +48,10 @@ class IProductRepo(ABC):
     async def update(
         self, id: int, product_data: ProductDomain
     ) -> ProductDomain | None:
+        raise NotImplementedError()
+
+    @abstractmethod
+    async def update_reviews_statistics(self, list_id: list[int]) -> Sequence[int]:
         raise NotImplementedError()
 
     @abstractmethod

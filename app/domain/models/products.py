@@ -16,7 +16,8 @@ class ProductDomain:
     description: str | None = None
     image_url: str | None = None
     is_active: bool = True
-    rating: Decimal = Decimal(0)
+    sum_grade: int = 0
+    reviews_count: int = 0
 
     def filtered_none_fields(self):
         return asdict(
@@ -32,5 +33,9 @@ class MainProductsDomain:
     id: int
     name: str
     price: Decimal
-    rating: Decimal
     image_url: str | None = None
+    sum_grade: int = 0
+    reviews_count: int = 0
+
+    def as_dict(self):
+        return asdict(self)

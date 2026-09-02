@@ -4,14 +4,18 @@ from app.application.schemas.entities.categories_schemas import (
     UpdateCategorySchema,
 )
 from app.application.schemas.utils.success_delete_schema import SuccessDeleteSchema
+from app.domain.interfaces.redis.i_cache_client import ICacheClient
 from app.domain.interfaces.uow.i_unit_of_work import IUnitOfWork
 from app.domain.models.categories import CategoryDomain
+from app.infrastructure.redis.decorators import redis_cache
 
 
 class CategoryServices:
-    def __init__(self, uow: IUnitOfWork):
+    def __init__(self, uow: IUnitOfWork, cache_client: ICacheClient):
         self.uow = uow
+        self.cache_client = cache_client
 
+    @redis_cache(lambda _: "all_categories", 10000, list[CategorySchema])
     async def get_all_categories(self) -> list[CategorySchema]:
         async with self.uow as uow:
             categories = await uow.categories.get_all()
@@ -21,6 +25,7 @@ class CategoryServices:
             else []
         )
 
+    @redis_cache(lambda id: f"categories:{id}", 10000, CategorySchema)
     async def get_category_by_id(self, id: int) -> CategorySchema:
         async with self.uow as uow:
             category = await uow.categories.get_by_id(id)
@@ -28,6 +33,9 @@ class CategoryServices:
             raise ValueError(f"Категории с ID {id} не существует")
         return CategorySchema.model_validate(category)
 
+    @redis_cache(
+        lambda product_id: f"categories:products:{product_id}", 1000, CategorySchema
+    )
     async def get_category_by_product(self, product_id: int) -> CategorySchema:
         async with self.uow as uow:
             exists_product = await uow.products.exists_by_id(product_id)
@@ -42,26 +50,30 @@ class CategoryServices:
         self, category_data: CreateCategorySchema
     ) -> CategorySchema:
         async with self.uow as uow:
-            category = await uow.categories.get_by_name(category_data.name)
-            if category is not None:
-                raise ValueError(f"Категория с именем {category.name} уже существует")
+            exists_category = await uow.categories.exists_by_name(category_data.name)
+            if exists_category:
+                raise ValueError(
+                    f"Категория с именем {category_data.name} уже существует"
+                )
             new_category = await uow.categories.create(
                 CategoryDomain(**category_data.model_dump())
             )
             await uow.commit()
+        await self.cache_client.delete("all_categories")
         return CategorySchema.model_validate(new_category)
 
     async def update_category(
         self, id: int, category_data: UpdateCategorySchema
     ) -> CategorySchema:
         async with self.uow as uow:
-            category = await uow.categories.get_by_id(id)
-            if category is None:
+            exists_category = await uow.categories.exists_by_id(id)
+            if not exists_category:
                 raise ValueError(f"Категории с ID {id} не существует")
             updated_category = await uow.categories.update(
                 id, CategoryDomain(**category_data.model_dump())
             )
             await uow.commit()
+        await self.cache_client.delete("all_categories", f"categories:{id}")
         return CategorySchema.model_validate(updated_category)
 
     async def delete_category(self, id: int) -> SuccessDeleteSchema:
@@ -71,4 +83,5 @@ class CategoryServices:
                 raise ValueError(f"Категории с id {id} не существует")
             cat_id = await uow.categories.delete(id)
             await uow.commit()
+        await self.cache_client.delete("all_categories", f"categories:{id}")
         return SuccessDeleteSchema(detail=f"Категория с ID {cat_id} успешно удалена")

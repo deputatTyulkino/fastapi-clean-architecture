@@ -36,7 +36,8 @@ class ProductORM(Base):
     image_url: Mapped[str | None] = mapped_column(String(200))
     stock: Mapped[int] = mapped_column(nullable=False)
     is_active: Mapped[bool]
-    rating: Mapped[Decimal] = mapped_column(Numeric(2, 1))
+    sum_grade: Mapped[int]
+    reviews_count: Mapped[int]
     category_id: Mapped[int] = mapped_column(
         ForeignKey("categories.id"), nullable=False
     )

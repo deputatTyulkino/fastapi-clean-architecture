@@ -5,17 +5,26 @@ from app.application.schemas.entities.sellers_schemas import (
 )
 from app.application.schemas.entities.users_schemas import UserSchema
 from app.application.schemas.utils.success_delete_schema import SuccessDeleteSchema
+from app.domain.interfaces.redis.i_cache_client import ICacheClient
 from app.domain.interfaces.uow.i_unit_of_work import IUnitOfWork
-from app.domain.interfaces.utils.i_image_storage import IImageStorage
+from app.domain.interfaces.utils.i_image_storage import IImageServices
 from app.domain.models.files import FileDomain
 from app.domain.models.sellers import SellerDomain
+from app.infrastructure.redis.decorators import redis_cache
 
 
 class SellerServices:
-    def __init__(self, uow: IUnitOfWork, image_storage: IImageStorage):
+    def __init__(
+        self,
+        uow: IUnitOfWork,
+        image_services: IImageServices,
+        cache_client: ICacheClient,
+    ):
         self.uow = uow
-        self.image_storage = image_storage
+        self.image_services = image_services
+        self.cache_client = cache_client
 
+    @redis_cache(lambda id: f"sellers:{id}", 500, SellerProfileSchema)
     async def get_seller_by_id(self, id: int) -> SellerProfileSchema:
         async with self.uow as uow:
             seller = await uow.sellers.get_by_id(id)
@@ -29,6 +38,9 @@ class SellerServices:
             **seller.as_dict(),
         )
 
+    @redis_cache(
+        lambda product_id: f"products:{product_id}:seller", 500, SellerProfileSchema
+    )
     async def get_seller_by_product(self, product_id: int) -> SellerProfileSchema:
         async with self.uow as uow:
             exists_product = await uow.products.exists_by_id(product_id)
@@ -55,10 +67,10 @@ class SellerServices:
                     f"Пользователя с ID {seller_data.user_id} не существует"
                 )
             new_logo = (
-                await self.image_storage.save_image(logo, "logos") if logo else None
+                await self.image_services.save_image(logo, "logos") if logo else None
             )
             new_banner = (
-                await self.image_storage.save_image(banner, "banners")
+                await self.image_services.save_image(banner, "banners")
                 if banner
                 else None
             )
@@ -88,14 +100,14 @@ class SellerServices:
             if seller is None:
                 raise ValueError(f"Нет информации по профилю с ID {id}")
             if seller.logo_url and logo:
-                await self.image_storage.remove_image(seller.logo_url)
+                await self.image_services.remove_image(seller.logo_url)
             new_logo = (
-                await self.image_storage.save_image(logo, "logos") if logo else None
+                await self.image_services.save_image(logo, "logos") if logo else None
             )
             if seller.banner_url and banner:
-                await self.image_storage.remove_image(seller.banner_url)
+                await self.image_services.remove_image(seller.banner_url)
             new_banner = (
-                await self.image_storage.save_image(banner, "banners")
+                await self.image_services.save_image(banner, "banners")
                 if banner
                 else None
             )
@@ -114,6 +126,7 @@ class SellerServices:
                 raise ValueError(
                     f"Пользователь с ID {new_seller.user_id} не существует"
                 )
+        await self.cache_client.delete(f"sellers:{id}")
         return SellerProfileSchema(
             user=UserSchema.model_validate(user),
             **new_seller.as_dict(),
@@ -125,14 +138,15 @@ class SellerServices:
             if seller is None:
                 raise ValueError(f"Нет информации по профилю с ID {id}")
             if seller.logo_url:
-                await self.image_storage.remove_image(seller.logo_url)
+                await self.image_services.remove_image(seller.logo_url)
             if seller.banner_url:
-                await self.image_storage.remove_image(seller.banner_url)
+                await self.image_services.remove_image(seller.banner_url)
             seller_id = await uow.sellers.delete(id)
             if seller_id is None:
                 await uow.rollback()
                 raise ValueError(f"Не удалось удалить профиль с ID {id}")
             await uow.commit()
+        await self.cache_client.delete(f"sellers:{id}")
         return SuccessDeleteSchema(
             detail=f"Информация об аккаунте продавца с ID {seller_id} успешно удалена"
         )

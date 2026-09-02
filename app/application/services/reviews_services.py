@@ -8,15 +8,21 @@ from app.application.schemas.entities.reviews_schemas import (
 from app.application.schemas.entities.users_schemas import UserSchema
 from app.application.schemas.utils.query_params_schema import ParamsReviewsSchema
 from app.application.schemas.utils.success_delete_schema import SuccessDeleteSchema
+from app.domain.interfaces.redis.i_cache_client import ICacheClient
 from app.domain.interfaces.uow.i_unit_of_work import IUnitOfWork
 from app.domain.models.reviews import ReviewDomain
 from app.domain.models.users import UserDomain
+from app.infrastructure.redis.decorators import redis_cache
 
 
 class ReviewServices:
-    def __init__(self, uow: IUnitOfWork):
+    def __init__(self, uow: IUnitOfWork, cache_client: ICacheClient):
         self.uow = uow
+        self.cache_client = cache_client
 
+    @redis_cache(
+        lambda product_id: f"products:{product_id}:reviews", 500, list[ReviewSchema]
+    )
     async def get_all_reviews(
         self, query_params: ParamsReviewsSchema
     ) -> list[ReviewSchema]:
@@ -44,6 +50,9 @@ class ReviewServices:
             for ind, review in enumerate(reviews)
         ]
 
+    @redis_cache(
+        lambda product_id: f"products:{product_id}:reviews:top", 500, list[ReviewSchema]
+    )
     async def get_top_reviews(self, product_id: int) -> list[ReviewSchema]:
         users_top_reviews = []
         users_top_reviews_tasks: list[asyncio.Task[UserDomain | None]] = []
@@ -86,6 +95,10 @@ class ReviewServices:
                 ReviewDomain(user_id=user_id, **review_data.model_dump())
             )
             await uow.commit()
+        await self.cache_client.delete(
+            f"products:{review.product_id}:reviews",
+            f"products:{review.product_id}:reviews:top",
+        )
         return ReviewSchema(**review.as_dict(), user=UserSchema.model_validate(user))
 
     async def update_review(
@@ -105,6 +118,10 @@ class ReviewServices:
             if review is None:
                 raise ValueError(f"Не удалось обновить отзыв с ID {id}")
             await uow.commit()
+        await self.cache_client.delete(
+            f"products:{review.product_id}:reviews",
+            f"products:{review.product_id}:reviews:top",
+        )
         return ReviewSchema(**review.as_dict(), user=UserSchema.model_validate(user))
 
     async def delete_review(
@@ -118,4 +135,8 @@ class ReviewServices:
                 raise ValueError("У вас нет прав на удаление этого отзыва")
             review_id = await uow.reviews.delete(id)
             await uow.commit()
+        await self.cache_client.delete(
+            f"products:{review.product_id}:reviews",
+            f"products:{review.product_id}:reviews:top",
+        )
         return SuccessDeleteSchema(detail=f"Отзыв с ID {review_id} успешно удалён")

@@ -5,11 +5,11 @@ from typing import cast
 import aiofiles
 from PIL import Image, UnidentifiedImageError
 
-from app.domain.interfaces.utils.i_image_storage import IImageStorage
+from app.domain.interfaces.utils.i_image_storage import IImageServices
 from app.domain.models.files import FileDomain
 
 
-class ImageStorage(IImageStorage):
+class ImageServices(IImageServices):
     def __init__(self):
         self.BASE_DIR = Path(__file__).resolve().parent.parent.parent
         self.MEDIA_ROOT = self.BASE_DIR / "media"
