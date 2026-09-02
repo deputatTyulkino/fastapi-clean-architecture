@@ -5,12 +5,12 @@ T = TypeVar("T")
 
 
 class ISerializerServices(ABC):
-    @abstractmethod
     @staticmethod
+    @abstractmethod
     def serializer(value: Any, type_: type[T] | None = None) -> str | None:
         raise NotImplementedError()
 
-    @abstractmethod
     @staticmethod
+    @abstractmethod
     def deserializer(value: str | None, type_: type[T] | None = None) -> T | Any:
         raise NotImplementedError()

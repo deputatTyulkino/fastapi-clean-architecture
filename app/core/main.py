@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from app.infrastructure.database.connect import engine, session_factory
-from app.infrastructure.depends.redis_depends import get_redis_manager_infr
+from app.infrastructure.depends.utils.redis_depends import get_redis_manager_infr
 from app.presentation.routers.categories import router as categories_router
 from app.presentation.routers.products import router as products_router
 from app.presentation.routers.sellers import router as sellers_router
