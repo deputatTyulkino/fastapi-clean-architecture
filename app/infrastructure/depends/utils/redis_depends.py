@@ -15,3 +15,8 @@ def get_cache_client(
     redis_manager: Annotated[RedisManager, Depends(get_redis_manager_infr)],
 ):
     return redis_manager.cache_client
+
+
+def get_state_client():
+    redis_manager: RedisManager = get_redis_manager_infr()
+    return redis_manager.state_client

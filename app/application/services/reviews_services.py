@@ -9,6 +9,7 @@ from app.application.schemas.entities.users_schemas import UserSchema
 from app.application.schemas.utils.query_params_schema import ParamsReviewsSchema
 from app.application.schemas.utils.success_delete_schema import SuccessDeleteSchema
 from app.domain.interfaces.redis.i_cache_client import ICacheClient
+from app.domain.interfaces.redis.i_state_client import IStateClient
 from app.domain.interfaces.uow.i_unit_of_work import IUnitOfWork
 from app.domain.models.reviews import ReviewDomain
 from app.domain.models.users import UserDomain
@@ -16,9 +17,12 @@ from app.infrastructure.redis.decorators import redis_cache
 
 
 class ReviewServices:
-    def __init__(self, uow: IUnitOfWork, cache_client: ICacheClient):
+    def __init__(
+        self, uow: IUnitOfWork, cache_client: ICacheClient, state_client: IStateClient
+    ):
         self.uow = uow
         self.cache_client = cache_client
+        self.state_client = state_client
 
     @redis_cache(
         lambda product_id: f"products:{product_id}:reviews", 500, list[ReviewSchema]
@@ -95,6 +99,9 @@ class ReviewServices:
                 ReviewDomain(user_id=user_id, **review_data.model_dump())
             )
             await uow.commit()
+        await self.state_client.sadd(
+            "dirty_products_ids", f"products:{review.product_id}"
+        )
         await self.cache_client.delete(
             f"products:{review.product_id}:reviews",
             f"products:{review.product_id}:reviews:top",
