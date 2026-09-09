@@ -3,8 +3,8 @@ from celery.signals import worker_process_init, worker_process_shutdown
 
 from app.core.config import get_settings
 from app.infrastructure.celery import config
-from app.infrastructure.depends.async_task_runner import get_async_task_runner
-from app.infrastructure.depends.redis_depends import get_redis_manager_infr
+from app.infrastructure.depends.utils.async_task_runner import get_async_task_runner
+from app.infrastructure.depends.utils.redis_depends import get_redis_manager_infr
 
 settings = get_settings()
 redis_manager = get_redis_manager_infr()

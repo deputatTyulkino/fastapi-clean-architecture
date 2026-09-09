@@ -45,16 +45,15 @@ class RefreshTokenRepo(IRefreshTokenRepo):
             await p.hset(
                 token_key, mapping={"user_id": user_id, "family_id": family_id}
             )
-            p.expire(token_key, self.ttl)
-            p.sadd(family_key, new_token_hash)
-            p.expire(family_key, self.ttl)
+            await p.hexpire(token_key, self.ttl)
+            await p.sadd(family_key, new_token_hash)
+            await p.expire(family_key, self.ttl)
             await p.execute()
 
     async def revoke_family(self, family_id: str) -> None:
-        family_key = self._family_key(family_id)
-        token_hashes = await self.state_client.smembers(family_key)
+        token_hashes = await self.state_client.smembers(self._family_key(family_id))
         async with self.state_client.pipeline(transaction=True) as p:
             for token_hash in token_hashes:
                 await p.delete(self._token_key(cast(str, token_hash)))
-            await p.delete(family_key)
+            await p.delete(self._family_key(family_id))
             await p.execute()

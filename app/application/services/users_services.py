@@ -77,8 +77,8 @@ class UserServices:
         if record is None:
             raise ValueError(message)
         async with self.uow as uow:
-            user = await uow.users.get_by_email(record["user_id"])
-            if not user or not user.is_active:
+            user = await uow.users.get_by_id(record["user_id"])
+            if user is None or not user.is_active:
                 await self.refresh_token_repo.revoke_family(record["family_id"])
                 raise ValueError(message)
         access = self.token_services.create_access_token(
@@ -94,7 +94,8 @@ class UserServices:
         )
 
     async def logout(self, refresh: str) -> None:
-        token_hash = self.token_services.hash_refresh_token(refresh)
-        record = await self.refresh_token_repo.get(token_hash)
+        record = await self.refresh_token_repo.get(
+            self.token_services.hash_refresh_token(refresh)
+        )
         if record:
             await self.refresh_token_repo.revoke_family(record["family_id"])
