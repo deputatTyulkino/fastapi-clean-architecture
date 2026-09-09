@@ -1,0 +1,63 @@
+# --- VCS ---
+.git
+.gitignore
+.gitattributes
+
+# --- Python runtime junk ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+*.egg
+build/
+dist/
+
+# --- Виртуальные окружения (собираем зависимости заново в контейнере) ---
+.venv/
+venv/
+env/
+ENV/
+
+# --- Секреты и локальные конфиги ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# --- IDE / OS ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# --- Тесты, линтеры, CI ---
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+.github/
+
+# --- Docker-инфраструктура (не нужна внутри самого образа) ---
+Dockerfile
+Dockerfile.*
+docker-compose*.yml
+.dockerignore
+
+# --- Документация, не нужная в рантайме ---
+README.md
+CHANGELOG.md
+docs/
+
+# --- Алембик кэш/логи, если генерируются локально ---
+*.log
+alembic/versions/__pycache__/
+
+# --- Данные/дампы, которые не должны улетать в образ ---
+*.sql
+*.dump
+media/

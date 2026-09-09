@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from typing import Literal
 
 
 class ITokenServices(ABC):
@@ -16,5 +15,15 @@ class ITokenServices(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def create_token(self, data: dict, token_type: Literal["access", "refresh"]) -> str:
+    def create_access_token(self, data: dict) -> str:
+        raise NotImplementedError()
+
+    @staticmethod
+    @abstractmethod
+    def create_refresh_token() -> str:
+        raise NotImplementedError()
+
+    @staticmethod
+    @abstractmethod
+    def hash_refresh_token(token_raw: str) -> str:
         raise NotImplementedError()

@@ -1,3 +1,5 @@
+import hashlib
+import secrets
 from datetime import datetime, timedelta, timezone
 
 import jwt
@@ -21,8 +23,6 @@ class TokenServices(ITokenServices):
                 "email": payload["sub"],
                 "token_type": payload["token_type"],
             }
-        except jwt.ExpiredSignatureError:
-            return None
         except jwt.PyJWTError:
             return None
 
@@ -32,12 +32,19 @@ class TokenServices(ITokenServices):
     def verify_password(self, plain_password: str, hashed_password: str) -> bool:
         return self.pwd_context.verify(plain_password, hashed_password)
 
-    def create_token(self, data: dict, token_type: str) -> str:
-        to_encode = data.copy()
+    def create_access_token(self, data: dict) -> str:
         expire = datetime.now(timezone.utc) + timedelta(
             minutes=self.settings.ACCESS_TOKEN_EXPIRE_MINUTES
         )
-        to_encode.update({"exp": expire, "token_type": token_type})
+        to_encode = {**data, "exp": expire, "token_type": "access"}
         return jwt.encode(
             to_encode, self.settings.SECRET_KEY, algorithm=self.settings.ALGORITHM
         )
+
+    @staticmethod
+    def create_refresh_token() -> str:
+        return secrets.token_urlsafe(32)
+
+    @staticmethod
+    def hash_refresh_token(token_raw: str) -> str:
+        return hashlib.sha256(token_raw.encode()).hexdigest()

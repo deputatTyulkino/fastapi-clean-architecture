@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int
     REDIS_VOLATILE_URL: str
     REDIS_DURABLE_URL: str
+    REFRESH_COOKIE_NAME: str
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

@@ -38,3 +38,8 @@ async def root() -> dict:
     Корневой маршрут, подтверждающий, что API работает.
     """
     return {"message": "Добро пожаловать в API интернет-магазина!"}
+
+
+@app.get("/health", status_code=200)
+async def health():
+    return True

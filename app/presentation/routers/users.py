@@ -1,10 +1,9 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
 
 from app.application.schemas.entities.users_schemas import (
     LoginUserSchema,
-    RefreshTokenSchema,
     RegisterUserSchema,
     ResponseUserSchema,
 )
@@ -22,25 +21,22 @@ router = APIRouter(prefix="/auth", tags=["users"])
     summary="Регистрация нового пользователя",
 )
 async def register_user(
+    response: Response,
     user_data: Annotated[RegisterUserSchema, Depends(RegisterUserSchema.as_form)],
     services: Annotated[UserServices, Depends(get_users_servcies)],
 ):
-    """
-    Регистрация нового пользователя.
-
-    **Параметры запроса** (form-data):
-    - Все поля, определённые в `RegisterUserSchema` (обычно `email`, `password`, `username` и т.д.).
-
-    **Возвращает**:
-    - `data`: объект `ResponseUserSchema` с информацией о созданном пользователе (включая `id`, `email`, `username` и, возможно, токены).
-
-    **Возможные ошибки**:
-    - `409 Conflict`: пользователь с таким email/username уже существует.
-    - `400 Bad Request`: неверный формат данных (например, слабый пароль, некорректный email) — если такая валидация есть в сервисе.
-    """
     try:
         data = await services.register_user(user_data)
-        return SuccessResponseSchema(data=data)
+        response.set_cookie(
+            key="refresh_token",
+            value=data.refresh,
+            samesite="strict",
+            httponly=True,
+            secure=False,  # prod: True
+            path="/auth",
+            max_age=60 * 60 * 24 * 30,
+        )
+        return SuccessResponseSchema(data=ResponseUserSchema.model_validate(data))
     except ValueError as e:
         # В зависимости от логики сервиса может быть 409 или 400
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
@@ -53,25 +49,22 @@ async def register_user(
     summary="Аутентификация пользователя",
 )
 async def login_user(
+    response: Response,
     user_data: Annotated[LoginUserSchema, Depends(LoginUserSchema.as_form)],
     services: Annotated[UserServices, Depends(get_users_servcies)],
 ):
-    """
-    Вход пользователя в систему.
-
-    **Параметры запроса** (form-data):
-    - Поля из `LoginUserSchema` (обычно `email`/`username` и `password`).
-
-    **Возвращает**:
-    - `data`: объект `ResponseUserSchema`, содержащий информацию о пользователе и пару токенов (access, refresh).
-
-    **Возможные ошибки**:
-    - `400 Bad Request`: неверные учётные данные (пользователь не найден или пароль не совпадает).
-    - `409 Conflict` / `403 Forbidden`: если учётная запись заблокирована или требует подтверждения (зависит от бизнес-логики).
-    """
     try:
         data = await services.login_user(user_data)
-        return SuccessResponseSchema(data=data)
+        response.set_cookie(
+            key="refresh_token",
+            value=data.refresh,
+            samesite="strict",
+            httponly=True,
+            secure=False,  # prod: True
+            path="/auth",
+            max_age=60 * 60 * 24 * 30,
+        )
+        return SuccessResponseSchema(data=ResponseUserSchema.model_validate(data))
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -83,26 +76,28 @@ async def login_user(
     summary="Обновление токенов",
 )
 async def refresh_token(
-    refresh_dict_info: Annotated[
-        RefreshTokenSchema, Depends(RefreshTokenSchema.as_form)
-    ],
+    response: Response,
     services: Annotated[UserServices, Depends(get_users_servcies)],
+    refresh_token: Annotated[str | None, Cookie(alias="refresh_token")] = None,
 ):
-    """
-    Обновление пары токенов.
-
-    **Параметры запроса** (form-data):
-    - `refresh_token` (строка, обязательное) — действующий refresh-токен.
-
-    **Возвращает**:
-    - `data`: объект `ResponseUserSchema` с обновлёнными токенами (access, refresh) и данными пользователя.
-
-    **Возможные ошибки**:
-    - `400 Bad Request`: передан невалидный, истёкший или отсутствующий refresh-токен.
-    - `401 Unauthorized`: токен недействителен (если сервис выбрасывает более специфичное исключение, можно заменить статус).
-    """
+    if refresh_token is None:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Авторизуйтесь снова")
     try:
-        data = await services.refresh_token(refresh_dict_info)
-        return SuccessResponseSchema(data=data)
+        data = await services.refresh_token(refresh_token)
     except ValueError as e:
+        response.delete_cookie("refresh_token", path="/auth")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    return SuccessResponseSchema(data=ResponseUserSchema.model_validate(data))
+
+
+@router.post(
+    "/logout", response_model=SuccessResponseSchema[str], status_code=status.HTTP_200_OK
+)
+async def logout(
+    response: Response,
+    services: Annotated[UserServices, Depends(get_users_servcies)],
+    refresh_token: Annotated[str | None, Cookie(alias="refresh_token")] = None,
+):
+    if refresh_token:
+        await services.logout(refresh_token)
+    response.delete_cookie("refresh_token", path="/auth")

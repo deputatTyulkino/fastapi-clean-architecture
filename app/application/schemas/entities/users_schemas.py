@@ -25,6 +25,9 @@ class UserSchema(BaseModel):
 class ResponseUserSchema(BaseModel):
     user: UserSchema
     access: str
+
+
+class AuthResult(ResponseUserSchema):
     refresh: str
 
 
