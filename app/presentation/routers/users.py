@@ -6,6 +6,7 @@ from app.application.schemas.entities.users_schemas import (
     LoginUserSchema,
     RegisterUserSchema,
     ResponseUserSchema,
+    VerifyUserEmailSchema,
 )
 from app.application.schemas.utils.success_response_schema import SuccessResponseSchema
 from app.application.services.users_services import UserServices
@@ -21,12 +22,28 @@ router = APIRouter(prefix="/auth", tags=["users"])
     summary="Регистрация нового пользователя",
 )
 async def register_user(
-    response: Response,
     user_data: Annotated[RegisterUserSchema, Depends(RegisterUserSchema.as_form)],
     services: Annotated[UserServices, Depends(get_users_servcies)],
 ):
     try:
         data = await services.register_user(user_data)
+        return SuccessResponseSchema(data=ResponseUserSchema.model_validate(data))
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+
+
+@router.post(
+    "/verify",
+    response_model=SuccessResponseSchema[ResponseUserSchema],
+    status_code=status.HTTP_201_CREATED,
+)
+async def verify_user(
+    response: Response,
+    user_data: Annotated[VerifyUserEmailSchema, Depends(VerifyUserEmailSchema.as_form)],
+    services: Annotated[UserServices, Depends(get_users_servcies)],
+):
+    try:
+        data = await services.verify_user_email(user_data)
         response.set_cookie(
             key="refresh_token",
             value=data.refresh,
@@ -38,8 +55,7 @@ async def register_user(
         )
         return SuccessResponseSchema(data=ResponseUserSchema.model_validate(data))
     except ValueError as e:
-        # В зависимости от логики сервиса может быть 409 или 400
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.post(

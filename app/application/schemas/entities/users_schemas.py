@@ -38,6 +38,15 @@ class RegisterResponseSchema(BaseModel):
 class VerifyUserEmailSchema(RegisterResponseSchema):
     code: str
 
+    @classmethod
+    def as_form(
+        cls, user_code: Annotated[str, Form(...)], code: Annotated[str, Form(...)]
+    ):
+        try:
+            return cls(user_code=user_code, code=code)
+        except ValidationError as e:
+            raise RequestValidationError(e.errors())
+
 
 class LoginUserSchema(BaseModel):
     email: EmailStr = Field(..., description="Email пользователя")

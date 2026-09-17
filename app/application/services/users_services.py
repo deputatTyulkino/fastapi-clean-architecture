@@ -67,7 +67,9 @@ class UserServices:
         if code != hashlib.sha256(verify_user_data.code.encode()).hexdigest():
             user_data["attempts"] += 1
             await self.state_client.set(
-                key, cast(str, self.serializer_services.serializer(user_data)), ttl=600
+                key,
+                cast(str, self.serializer_services.serializer(user_data)),
+                ttl=600,  # лучше добавить keepttl
             )
             raise ValueError("Неверный код")
         async with self.uow as uow:
