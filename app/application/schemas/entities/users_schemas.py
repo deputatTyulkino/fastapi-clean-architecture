@@ -31,6 +31,14 @@ class AuthResult(ResponseUserSchema):
     refresh: str
 
 
+class RegisterResponseSchema(BaseModel):
+    user_code: str
+
+
+class VerifyUserEmailSchema(RegisterResponseSchema):
+    code: str
+
+
 class LoginUserSchema(BaseModel):
     email: EmailStr = Field(..., description="Email пользователя")
     password: str = Field(..., description="Пароль", min_length=8)

@@ -3,9 +3,11 @@ from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import ColumnElement, exists, func, select, update
+from sqlalchemy.exc import NoResultFound
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased, load_only
 
+from app.domain.interfaces.logging.i_logger import ILogger
 from app.domain.interfaces.repositories.i_product_repo import IProductRepo
 from app.domain.models.products import (
     MainProductsDomain,
@@ -16,8 +18,9 @@ from app.infrastructure.models.reviews import ReviewORM
 
 
 class ProductRepo(IProductRepo):
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession, logger: ILogger):
         self.db = db
+        self.logger = logger.bind(repository="ProductRepo")
 
     def _to_orm_model(self, product: ProductDomain) -> ProductORM:
         return ProductORM(
@@ -112,6 +115,17 @@ class ProductRepo(IProductRepo):
             )
             products_stmt_res = (await self.db.scalars(products_stmt)).all()
             products = [self._to_domain_catalog_model(pr) for pr in products_stmt_res]
+        self.logger.debug(
+            "products_catalog_queried",
+            search=search,
+            seller_id=seller_id,
+            min_price=min_price,
+            max_price=max_price,
+            page=params["page"],
+            limit=params["limit"],
+            total=total,
+            returned=len(products),
+        )
         return products, total, params["page"], params["limit"]
 
     async def get_by_category(self, id: int) -> list[MainProductsDomain]:
@@ -122,6 +136,9 @@ class ProductRepo(IProductRepo):
             .options(load_only(p.id, p.name, p.price, p.image_url))
         )
         products = (await self.db.scalars(stmt)).all()
+        self.logger.debug(
+            "products_fetched_by_category", category_id=id, count=len(products)
+        )
         return [self._to_domain_catalog_model(product) for product in products]
 
     async def get_by_seller(self, id: int) -> list[MainProductsDomain]:
@@ -132,30 +149,35 @@ class ProductRepo(IProductRepo):
             .options(load_only(p.id, p.name, p.price, p.image_url))
         )
         products = (await self.db.scalars(stmt)).all()
+        self.logger.debug(
+            "products_fetched_by_seller", seller_id=id, count=len(products)
+        )
         return [self._to_domain_catalog_model(product) for product in products]
 
     async def get_by_id(self, id: int) -> ProductDomain | None:
+        p = aliased(ProductORM)
         stmt = (
-            select(ProductORM)
-            .filter(ProductORM.id == id, ProductORM.is_active)
+            select(p)
+            .filter(p.id == id, p.is_active)
             .options(
                 load_only(
-                    ProductORM.id,
-                    ProductORM.name,
-                    ProductORM.description,
-                    ProductORM.price,
-                    ProductORM.image_url,
-                    ProductORM.stock,
-                    ProductORM.is_active,
-                    ProductORM.category_id,
-                    ProductORM.seller_id,
-                    ProductORM.created_at,
-                    ProductORM.updated_at,
+                    p.id,
+                    p.name,
+                    p.description,
+                    p.price,
+                    p.image_url,
+                    p.stock,
+                    p.is_active,
+                    p.category_id,
+                    p.seller_id,
+                    p.created_at,
+                    p.updated_at,
                 )
             )
         )
         product = (await self.db.execute(stmt)).scalar_one_or_none()
         if product is None:
+            self.logger.debug("product_not_found", product_id=id)
             return None
         return self._to_domain_model(product)
 
@@ -168,18 +190,29 @@ class ProductRepo(IProductRepo):
         return bool(await self.db.scalar(stmt))
 
     async def get_rating_by_id(self, id: int) -> Decimal:
-        query = ( 
+        query = (
             select(ProductORM)
             .filter(ProductORM.id == id)
             .options(load_only(ProductORM.sum_grade, ProductORM.reviews_count))
         )
-        data = (await self.db.execute(query)).scalar_one()
+        try:
+            data = (await self.db.execute(query)).scalar_one()
+        except NoResultFound:
+            self.logger.warning("product_rating_not_found", product_id=id)
+            raise
         return Decimal(data.sum_grade / data.reviews_count)
 
     async def create(self, product_data: ProductDomain) -> ProductDomain:
         new_product = self._to_orm_model(product_data)
         self.db.add(new_product)
         await self.db.flush()
+        self.logger.info(
+            "product_created",
+            product_id=new_product.id,
+            name=new_product.name,
+            seller_id=new_product.seller_id,
+            category_id=new_product.category_id,
+        )
         return self._to_domain_model(new_product)
 
     async def update(
@@ -194,7 +227,9 @@ class ProductRepo(IProductRepo):
         )
         product = (await self.db.execute(stmt)).scalar_one_or_none()
         if product is None:
+            self.logger.warning("product_update_not_found", product_id=id)
             return None
+        self.logger.info("product_updated", product_id=id)
         return self._to_domain_model(product)
 
     async def update_reviews_statistics(self, list_id: list[int]) -> Sequence[int]:
@@ -219,6 +254,11 @@ class ProductRepo(IProductRepo):
             .returning(p.id)
         )
         products_id = (await self.db.execute(stmt)).scalars().all()
+        self.logger.info(
+            "product_reviews_statistics_updated",
+            requested=len(list_id),
+            updated=len(products_id),
+        )
         return products_id
 
     async def delete(self, id: int) -> int | None:
@@ -230,4 +270,8 @@ class ProductRepo(IProductRepo):
             .returning(p.id)
         )
         product_id = (await self.db.execute(stmt)).scalar_one_or_none()
+        if product_id is None:
+            self.logger.warning("product_delete_not_found", product_id=id)
+            return None
+        self.logger.info("product_deleted", product_id=product_id)
         return product_id

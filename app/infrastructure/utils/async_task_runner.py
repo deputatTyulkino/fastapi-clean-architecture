@@ -30,6 +30,6 @@ class AsyncTaskRunner(IAsyncTaskRunner):
         asyncio.set_event_loop(loop)
         loop.run_forever()
 
-    def run(self, coro: Coroutine[Any, Any, None]) -> None:
+    def run(self, coro: Coroutine[Any, Any, Any]) -> Any:
         task = asyncio.run_coroutine_threadsafe(coro, self.get_loop())
         return task.result()

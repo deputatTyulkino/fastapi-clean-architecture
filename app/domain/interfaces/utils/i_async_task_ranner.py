@@ -14,5 +14,5 @@ class IAsyncTaskRunner(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def run(self, coro: Coroutine[Any, Any, None]) -> None:
+    def run(self, coro: Coroutine[Any, Any, Any]) -> Any:
         raise NotADirectoryError()

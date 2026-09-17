@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Self
 
+from app.domain.interfaces.repositories.i_cart_item_repo import ICartItemsRepo
 from app.domain.interfaces.repositories.i_category_repo import ICategoryRepo
 from app.domain.interfaces.repositories.i_product_repo import IProductRepo
 from app.domain.interfaces.repositories.i_review_repo import IReviewsRepo
@@ -32,6 +33,11 @@ class IUnitOfWork(ABC):
     @property
     @abstractmethod
     def sellers(self) -> ISellerRepo:
+        raise NotImplementedError()
+
+    @property
+    @abstractmethod
+    def cart_items(self) -> ICartItemsRepo:
         raise NotImplementedError()
 
     @abstractmethod

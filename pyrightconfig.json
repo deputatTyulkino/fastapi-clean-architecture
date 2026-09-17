@@ -2,10 +2,11 @@
   "venvPath": ".",
   "venv": ".venv",
   "pythonVersion": "3.14.0",
+  "reportFunctionMemberAccess": "none",
   "executionEnvironments": [
     {
       "root": ".",
-      "extraPaths": ["./"],
-    },
-  ],
+      "extraPaths": ["./"]
+    }
+  ]
 }

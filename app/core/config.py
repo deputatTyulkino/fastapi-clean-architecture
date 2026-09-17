@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     REDIS_VOLATILE_URL: str
     REDIS_DURABLE_URL: str
     REFRESH_COOKIE_NAME: str
+    RESEND_API_KEY: str
+    TEST_MAIL: str
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

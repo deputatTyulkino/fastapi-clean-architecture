@@ -2,12 +2,14 @@ from typing import Self
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.domain.interfaces.repositories.i_cart_item_repo import ICartItemsRepo
 from app.domain.interfaces.repositories.i_category_repo import ICategoryRepo
 from app.domain.interfaces.repositories.i_product_repo import IProductRepo
 from app.domain.interfaces.repositories.i_review_repo import IReviewsRepo
 from app.domain.interfaces.repositories.i_seller_repo import ISellerRepo
 from app.domain.interfaces.repositories.i_user_repo import IUserRepo
 from app.domain.interfaces.uow.i_unit_of_work import IUnitOfWork
+from app.infrastructure.repositories.cart_items_repo import CartItemsRepo
 from app.infrastructure.repositories.categories_repo import CategoryRepo
 from app.infrastructure.repositories.products_repo import ProductRepo
 from app.infrastructure.repositories.reviews_repo import ReviewRepo
@@ -24,6 +26,7 @@ class UnitOfWork(IUnitOfWork):
         self._products: IProductRepo | None = None
         self._sellers: ISellerRepo | None = None
         self._reviews: IReviewsRepo | None = None
+        self._cart_items: ICartItemsRepo | None = None
 
     @property
     def users(self) -> IUserRepo:
@@ -65,6 +68,14 @@ class UnitOfWork(IUnitOfWork):
             )
         return self._reviews
 
+    @property
+    def cart_items(self) -> ICartItemsRepo:
+        if self._cart_items is None:
+            raise RuntimeError(
+                "UnitOfWork не инициализирован. Используйте блок 'async with'"
+            )
+        return self._cart_items
+
     async def __aenter__(self) -> Self:
         if self.session is not None:
             raise RuntimeError("UnitOfWork уже активен")
@@ -74,6 +85,7 @@ class UnitOfWork(IUnitOfWork):
         self._products = ProductRepo(self.session)
         self._sellers = SellerRepo(self.session)
         self._reviews = ReviewRepo(self.session)
+        self._cart_items = CartItemsRepo(self.session)
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
@@ -89,6 +101,7 @@ class UnitOfWork(IUnitOfWork):
             self._products = None
             self._sellers = None
             self._reviews = None
+            self._cart_items = None
 
     async def commit(self) -> None:
         if self.session is None:

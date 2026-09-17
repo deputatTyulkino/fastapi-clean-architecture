@@ -2,6 +2,7 @@ from sqlalchemy import exists, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased, joinedload
 
+from app.domain.interfaces.logging.i_logger import ILogger
 from app.domain.interfaces.repositories.i_category_repo import ICategoryRepo
 from app.domain.models.categories import CategoryDomain
 from app.infrastructure.models.categories import CategoryORM
@@ -9,8 +10,9 @@ from app.infrastructure.models.products import ProductORM
 
 
 class CategoryRepo(ICategoryRepo):
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession, logger: ILogger):
         self.db = db
+        self.logger = logger.bind(repository="CategoryRepo")
 
     def _to_orm_model(self, category: CategoryDomain) -> CategoryORM:
         return CategoryORM(
@@ -25,12 +27,14 @@ class CategoryRepo(ICategoryRepo):
     async def get_all(self) -> list[CategoryDomain]:
         query = select(CategoryORM).filter(CategoryORM.is_active)
         data = (await self.db.scalars(query)).all()
+        self.logger.debug("categories_fetched", count=len(data))
         return [self._to_domain_model(category) for category in data]
 
     async def get_by_id(self, id: int) -> CategoryDomain | None:
         query = select(CategoryORM).filter(CategoryORM.id == id, CategoryORM.is_active)
         data = (await self.db.execute(query)).scalar_one_or_none()
         if data is None:
+            self.logger.debug("category_not_found", category_id=id)
             return None
         return self._to_domain_model(data)
 
@@ -40,6 +44,7 @@ class CategoryRepo(ICategoryRepo):
         )
         data = (await self.db.execute(query)).scalar_one_or_none()
         if data is None:
+            self.logger.debug("category_not_found", category_name=name)
             return None
         return self._to_domain_model(data)
 
@@ -54,6 +59,7 @@ class CategoryRepo(ICategoryRepo):
         )
         data = (await self.db.execute(query)).scalar_one_or_none()
         if data is None:
+            self.logger.debug("category_not_found", product_id=product_id)
             return None
         return self._to_domain_model(data)
 
@@ -69,6 +75,9 @@ class CategoryRepo(ICategoryRepo):
         category = self._to_orm_model(category_data)
         self.db.add(category)
         await self.db.flush()
+        self.logger.info(
+            "category_created", category_id=category.id, name=category.name
+        )
         return self._to_domain_model(category)
 
     async def update(
@@ -82,7 +91,9 @@ class CategoryRepo(ICategoryRepo):
         )
         category = (await self.db.execute(stmt)).scalar_one_or_none()
         if category is None:
+            self.logger.warning("category_update_not_found", category_id=id)
             return None
+        self.logger.info("category_updated", category_id=id)
         return self._to_domain_model(category)
 
     async def delete(self, id: int) -> int | None:
@@ -93,4 +104,8 @@ class CategoryRepo(ICategoryRepo):
             .returning(CategoryORM.id)
         )
         cat_id = (await self.db.execute(stmt)).scalar_one_or_none()
+        if cat_id is None:
+            self.logger.warning("category_delete_not_found", category_id=id)
+            return None
+        self.logger.info("category_deleted", category_id=cat_id)
         return cat_id

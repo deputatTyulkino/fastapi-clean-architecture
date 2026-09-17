@@ -1,14 +1,17 @@
 from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+
+from app.domain.interfaces.logging.i_logger import ILogger
 from app.domain.interfaces.repositories.i_user_repo import IUserRepo
 from app.domain.models.users import UserDomain
 from app.infrastructure.models.users import UserORM
 
 
 class UserRepo(IUserRepo):
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession, logger: ILogger):
         self.db = db
+        self.logger = logger.bind(repository="UserRepo")
 
     def _to_orm_model(self, user: UserDomain) -> UserORM:
         return UserORM(
@@ -32,6 +35,7 @@ class UserRepo(IUserRepo):
         query = select(UserORM).filter_by(email=email)
         user = (await self.db.execute(query)).scalar_one_or_none()
         if user is None:
+            self.logger.debug("user_not_found_by_email")
             return None
         return self._to_domain_model(user)
 
@@ -39,6 +43,7 @@ class UserRepo(IUserRepo):
         new_user = self._to_orm_model(user)
         self.db.add(new_user)
         await self.db.flush()
+        self.logger.info("user_created", user_id=new_user.id, role=new_user.role)
         return self._to_domain_model(new_user)
 
     async def exists_by_id(self, id: int) -> bool:
@@ -49,5 +54,6 @@ class UserRepo(IUserRepo):
         query = select(UserORM).filter_by(id=id)
         user = (await self.db.execute(query)).scalar_one_or_none()
         if user is None:
+            self.logger.debug("user_not_found", user_id=id)
             return None
         return self._to_domain_model(user)

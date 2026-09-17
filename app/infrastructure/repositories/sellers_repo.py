@@ -2,6 +2,7 @@ from sqlalchemy import exists, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased, joinedload
 
+from app.domain.interfaces.logging.i_logger import ILogger
 from app.domain.interfaces.repositories.i_seller_repo import ISellerRepo
 from app.domain.models.sellers import SellerDomain
 from app.infrastructure.models.products import ProductORM
@@ -9,8 +10,9 @@ from app.infrastructure.models.sellers import SellerORM
 
 
 class SellerRepo(ISellerRepo):
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession, logger: ILogger):
         self.db = db
+        self.logger = logger.bind(repository="SellerRepo")
 
     def _to_orm_model(self, seller: SellerDomain) -> SellerORM:
         return SellerORM(
@@ -54,6 +56,7 @@ class SellerRepo(ISellerRepo):
         query = select(SellerORM).filter_by(id=id)
         seller = (await self.db.execute(query)).scalar_one_or_none()
         if seller is None:
+            self.logger.debug("seller_not_found", seller_id=id)
             return None
         return self._to_domain_model(seller)
 
@@ -72,6 +75,7 @@ class SellerRepo(ISellerRepo):
         )
         seller = (await self.db.execute(query)).scalar_one_or_none()
         if seller is None:
+            self.logger.debug("seller_not_found", product_id=product_id)
             return None
         return self._to_domain_model(seller)
 
@@ -79,6 +83,12 @@ class SellerRepo(ISellerRepo):
         seller = self._to_orm_model(seller_data)
         self.db.add(seller)
         await self.db.flush()
+        self.logger.info(
+            "seller_created",
+            seller_id=seller.id,
+            user_id=seller.user_id,
+            store_name=seller.store_name,
+        )
         return self._to_domain_model(seller)
 
     async def update(self, id: int, seller_data: SellerDomain) -> SellerDomain | None:
@@ -90,7 +100,9 @@ class SellerRepo(ISellerRepo):
         )
         seller = (await self.db.execute(stmt)).scalar_one_or_none()
         if seller is None:
+            self.logger.warning("seller_update_not_found", seller_id=id)
             return None
+        self.logger.info("seller_updated", seller_id=id)
         return self._to_domain_model(seller)
 
     async def delete(self, id: int) -> int | None:
@@ -101,4 +113,8 @@ class SellerRepo(ISellerRepo):
             .returning(SellerORM.id)
         )
         seller_id = (await self.db.execute(stmt)).scalar_one_or_none()
+        if seller_id is None:
+            self.logger.warning("seller_delete_not_found", seller_id=id)
+            return None
+        self.logger.info("seller_deleted", seller_id=seller_id)
         return seller_id
