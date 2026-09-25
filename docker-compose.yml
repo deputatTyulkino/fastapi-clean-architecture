@@ -71,8 +71,6 @@ services:
   celery-beat:
     <<: *python-service
     command: celery -A app.celery_app beat --loglevel=info --schedule=/tmp/celerybeat-schedule
-    # beat — единственный экземпляр, никогда не масштабируется репликами,
-    # иначе задачи по расписанию будут дублироваться
     deploy:
       resources:
         limits:
@@ -115,8 +113,6 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  # Volatile-инстанс: кэш, брокер сообщений Celery, короткоживущие данные.
-  # Допустима потеря при рестарте — eviction policy агрессивная, allkeys-lru.
   redis-volatile:
     image: redis:7-alpine
     restart: unless-stopped
@@ -147,9 +143,6 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  # Durable-инстанс: распределённые локи (Lua-скрипты), данные, которые
-  # обязаны пережить рестарт. Eviction отключён — переполнение памяти
-  # должно быть ошибкой, а не тихой потерей данных.
   redis-durable:
     image: redis:7-alpine
     restart: unless-stopped

@@ -5,6 +5,7 @@ from app.application.schemas.entities.sellers_schemas import (
 )
 from app.application.schemas.entities.users_schemas import UserSchema
 from app.application.schemas.utils.success_delete_schema import SuccessDeleteSchema
+from app.domain.interfaces.logging.i_logger import ILogger
 from app.domain.interfaces.redis.i_cache_client import ICacheClient
 from app.domain.interfaces.uow.i_unit_of_work import IUnitOfWork
 from app.domain.interfaces.utils.i_image_storage import IImageServices
@@ -19,19 +20,29 @@ class SellerServices:
         uow: IUnitOfWork,
         image_services: IImageServices,
         cache_client: ICacheClient,
+        logger: ILogger,
     ):
         self.uow = uow
         self.image_services = image_services
         self.cache_client = cache_client
+        self.logger = logger.bind(component="SellerServices")
 
     @redis_cache(lambda id: f"sellers:{id}", 500, SellerProfileSchema)
     async def get_seller_by_id(self, id: int) -> SellerProfileSchema:
         async with self.uow as uow:
             seller = await uow.sellers.get_by_id(id)
             if seller is None:
+                self.logger.warning(
+                    "seller_lookup_failed", seller_id=id, reason="seller_not_found"
+                )
                 raise ValueError(f"Аккаунта продавца с ID {id} не существует")
             user = await uow.users.get_by_id(seller.user_id)
             if user is None:
+                self.logger.error(
+                    "seller_lookup_inconsistent",
+                    seller_id=id,
+                    user_id=seller.user_id,
+                )
                 raise ValueError(f"Пользователь с ID {seller.user_id} не существует")
         return SellerProfileSchema(
             user=UserSchema.model_validate(user),
@@ -45,9 +56,19 @@ class SellerServices:
         async with self.uow as uow:
             exists_product = await uow.products.exists_by_id(product_id)
             if not exists_product:
+                self.logger.warning(
+                    "seller_lookup_by_product_failed",
+                    product_id=product_id,
+                    reason="product_not_found",
+                )
                 raise ValueError(f"Продукта с ID {product_id} не существует")
             seller = await uow.sellers.get_by_product_id(product_id)
             if seller is None:
+                self.logger.warning(
+                    "seller_lookup_by_product_failed",
+                    product_id=product_id,
+                    reason="seller_not_found",
+                )
                 raise ValueError("Продавец не найден")
             user = await uow.users.get_by_id(seller.user_id)
         return SellerProfileSchema(
@@ -63,6 +84,11 @@ class SellerServices:
         async with self.uow as uow:
             exists_user = await uow.users.exists_by_id(seller_data.user_id)
             if not exists_user:
+                self.logger.warning(
+                    "seller_creation_rejected",
+                    user_id=seller_data.user_id,
+                    reason="user_not_found",
+                )
                 raise ValueError(
                     f"Пользователя с ID {seller_data.user_id} не существует"
                 )
@@ -82,6 +108,11 @@ class SellerServices:
             await uow.commit()
             user = await uow.users.get_by_id(seller.user_id)
             if user is None:
+                self.logger.error(
+                    "seller_creation_inconsistent",
+                    seller_id=seller.id,
+                    user_id=seller.user_id,
+                )
                 raise ValueError(f"Пользователь с ID {seller.user_id} не существует")
         return SellerProfileSchema(
             user=UserSchema.model_validate(user),
@@ -98,6 +129,9 @@ class SellerServices:
         async with self.uow as uow:
             seller = await uow.sellers.get_by_id(id)
             if seller is None:
+                self.logger.warning(
+                    "seller_update_rejected", seller_id=id, reason="not_found"
+                )
                 raise ValueError(f"Нет информации по профилю с ID {id}")
             if seller.logo_url and logo:
                 await self.image_services.remove_image(seller.logo_url)
@@ -119,10 +153,18 @@ class SellerServices:
             )
             if new_seller is None:
                 await uow.rollback()
+                self.logger.warning(
+                    "seller_update_failed", seller_id=id, reason="repo_returned_none"
+                )
                 raise ValueError("Не удалось обновить профиль")
             await uow.commit()
             user = await uow.users.get_by_id(seller.user_id)
             if user is None:
+                self.logger.error(
+                    "seller_update_inconsistent",
+                    seller_id=id,
+                    user_id=new_seller.user_id,
+                )
                 raise ValueError(
                     f"Пользователь с ID {new_seller.user_id} не существует"
                 )
@@ -136,6 +178,9 @@ class SellerServices:
         async with self.uow as uow:
             seller = await uow.sellers.get_by_id(id)
             if seller is None:
+                self.logger.warning(
+                    "seller_delete_rejected", seller_id=id, reason="not_found"
+                )
                 raise ValueError(f"Нет информации по профилю с ID {id}")
             if seller.logo_url:
                 await self.image_services.remove_image(seller.logo_url)
@@ -144,6 +189,9 @@ class SellerServices:
             seller_id = await uow.sellers.delete(id)
             if seller_id is None:
                 await uow.rollback()
+                self.logger.warning(
+                    "seller_delete_failed", seller_id=id, reason="repo_returned_none"
+                )
                 raise ValueError(f"Не удалось удалить профиль с ID {id}")
             await uow.commit()
         await self.cache_client.delete(f"sellers:{id}")

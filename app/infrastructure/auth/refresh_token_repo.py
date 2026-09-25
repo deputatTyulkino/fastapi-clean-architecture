@@ -2,7 +2,6 @@ from typing import cast
 
 from redis.asyncio import Redis
 
-
 from app.domain.interfaces.auth.i_refresh_token_repo import IRefreshTokenRepo
 from app.domain.interfaces.logging.i_logger import ILogger
 

@@ -2,8 +2,6 @@ import hashlib
 import uuid
 from typing import cast
 
-from dns import ttl
-
 from app.application.schemas.entities.users_schemas import (
     AuthResult,
     LoginUserSchema,
@@ -13,6 +11,7 @@ from app.application.schemas.entities.users_schemas import (
     VerifyUserEmailSchema,
 )
 from app.domain.interfaces.auth.i_refresh_token_repo import IRefreshTokenRepo
+from app.domain.interfaces.logging.i_logger import ILogger
 from app.domain.interfaces.mail.i_mail_manager import IMailManager
 from app.domain.interfaces.redis.i_serializer_services import ISerializerServices
 from app.domain.interfaces.redis.i_state_client import IStateClient
@@ -31,6 +30,7 @@ class UserServices:
         mail_manager: IMailManager,
         state_client: IStateClient,
         serializer_services: ISerializerServices,
+        logger: ILogger,
     ):
         self.uow = uow
         self.token_services = token_services
@@ -38,6 +38,7 @@ class UserServices:
         self.mail_manager = mail_manager
         self.state_client = state_client
         self.serializer_services = serializer_services
+        self.logger = logger.bind(component="UserServices")
 
     async def _create_tokens(self, user: UserDomain, family_id: str) -> tuple[str, str]:
         access = self.token_services.create_access_token(
@@ -56,12 +57,25 @@ class UserServices:
         key = f"verify:user:{verify_user_data.user_code}"
         serialized_user_data = await self.state_client.get(key)
         if serialized_user_data is None:
+            self.logger.warning(
+                "email_verification_code_expired",
+                user_code=verify_user_data.user_code,
+            )
             raise ValueError("Действие кода закончилось")
         user_data = self.serializer_services.deserializer(serialized_user_data)
         if user_data is None:
+            self.logger.error(
+                "email_verification_deserialization_failed",
+                user_code=verify_user_data.user_code,
+            )
             raise ValueError("Ошибка сериализации")
         attempts = user_data["attempts"]
         if attempts >= 5:
+            self.logger.warning(
+                "email_verification_attempts_exceeded",
+                user_code=verify_user_data.user_code,
+                attempts=attempts,
+            )
             raise ValueError("Превышено количество попыток")
         code = user_data["code"]
         if code != hashlib.sha256(verify_user_data.code.encode()).hexdigest():
@@ -69,7 +83,12 @@ class UserServices:
             await self.state_client.set(
                 key,
                 cast(str, self.serializer_services.serializer(user_data)),
-                ttl=600,  # лучше добавить keepttl
+                keepttl=True,
+            )
+            self.logger.warning(
+                "email_verification_code_mismatch",
+                user_code=verify_user_data.user_code,
+                attempts=user_data["attempts"],
             )
             raise ValueError("Неверный код")
         async with self.uow as uow:
@@ -81,6 +100,7 @@ class UserServices:
             await uow.commit()
         family_id = str(uuid.uuid4())
         access, refresh = await self._create_tokens(user, family_id)
+        self.logger.info("user_email_verified", user_id=user.id)
         return AuthResult(
             user=UserSchema.model_validate(user), access=access, refresh=refresh
         )
@@ -91,6 +111,7 @@ class UserServices:
         async with self.uow as uow:
             user = await uow.users.get_by_email(user_data.email)
             if user:
+                self.logger.warning("registration_rejected", reason="email_taken")
                 raise ValueError(f"Пользователь с {user.email} уже существует")
         user_verify_code = str(uuid.uuid4())
         code = self.mail_manager.generate_verification_code()
@@ -111,6 +132,7 @@ class UserServices:
             ttl=600,
         )
         verify_mail_task.delay(user_data.email, code)
+        self.logger.info("user_registration_initiated", user_code=user_verify_code)
         return RegisterResponseSchema(user_code=user_verify_code)
 
     async def login_user(self, user_data: LoginUserSchema) -> AuthResult:
@@ -119,11 +141,16 @@ class UserServices:
             if user is None or not self.token_services.verify_password(
                 user_data.password, user.hashed_password
             ):
+                self.logger.warning("login_failed", reason="invalid_credentials")
                 raise ValueError("Неправильный email или пароль")
             if not user.is_active:
+                self.logger.warning(
+                    "login_failed", reason="inactive_user", user_id=user.id
+                )
                 raise ValueError("Пользователь не активен")
         family_id = str(uuid.uuid4())
         access, refresh = await self._create_tokens(user, family_id)
+        self.logger.info("user_logged_in", user_id=user.id, role=user.role)
         return AuthResult(
             user=UserSchema.model_validate(user), access=access, refresh=refresh
         )
@@ -133,12 +160,18 @@ class UserServices:
         old_refresh_hash = self.token_services.hash_refresh_token(refresh_token)
         record = await self.refresh_token_repo.get(old_refresh_hash)
         if record is None:
+            self.logger.warning("refresh_token_rejected", reason="not_found")
             raise ValueError(message)
         async with self.uow as uow:
             user = await uow.users.get_by_id(record["user_id"])
-            if user is None or not user.is_active:
-                await self.refresh_token_repo.revoke_family(record["family_id"])
-                raise ValueError(message)
+        if user is None or not user.is_active:
+            await self.refresh_token_repo.revoke_family(record["family_id"])
+            self.logger.warning(
+                "refresh_token_rejected",
+                reason="user_missing_or_inactive",
+                user_id=record["user_id"],
+            )
+            raise ValueError(message)
         access = self.token_services.create_access_token(
             {"sub": user.email, "role": user.role, "id": user.id}
         )
@@ -147,6 +180,7 @@ class UserServices:
         await self.refresh_token_repo.rotate(
             old_refresh_hash, new_refresh_hash, cast(int, user.id), record["family_id"]
         )
+        self.logger.info("access_token_refreshed", user_id=user.id)
         return AuthResult(
             user=UserSchema.model_validate(user), access=access, refresh=new_refresh
         )
@@ -157,3 +191,4 @@ class UserServices:
         )
         if record:
             await self.refresh_token_repo.revoke_family(record["family_id"])
+            self.logger.info("user_logged_out", user_id=record["user_id"])

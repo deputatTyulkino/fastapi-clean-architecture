@@ -34,11 +34,6 @@ class RedisManager(IRedisManager):
             return 0
           end
       """
-    _POP_SET_LUA = """
-          local ids = redis.call('SMEMBERS', KEYS[1])
-          redis.call('DEL', KEYS[1])
-          return ids
-      """
 
     def __init__(self, volatile_url: str, durable_url: str):
         self._urls = {"volatile": volatile_url, "durable": durable_url}
@@ -89,7 +84,8 @@ class RedisManager(IRedisManager):
         await self.state_client.sadd("dirty_products", product_id)
 
     async def pop_dirty_products(self) -> list[int]:
-        product_ids = await self.state_client.eval(
-            self._POP_SET_LUA, 1, "dirty_products"
-        )
-        return [int(id) for id in product_ids]
+        async with self.state_client.pipeline(transaction=True) as p:
+            ids = await p.smembers("dirty_products")
+            await p.delete("dirty_products")
+            await p.execute()
+        return [int(x) for x in ids]

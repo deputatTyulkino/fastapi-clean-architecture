@@ -5,12 +5,13 @@ from typing import cast
 import aiofiles
 from PIL import Image, UnidentifiedImageError
 
+from app.domain.interfaces.logging.i_logger import ILogger
 from app.domain.interfaces.utils.i_image_storage import IImageServices
 from app.domain.models.files import FileDomain
 
 
 class ImageServices(IImageServices):
-    def __init__(self):
+    def __init__(self, logger: ILogger):
         self.BASE_DIR = Path(__file__).resolve().parent.parent.parent
         self.MEDIA_ROOT = self.BASE_DIR / "media"
         self.ALLOWED_IMAGE_MIME_TYPES = {"image/jpeg", "image/png", "image/webp"}
@@ -21,6 +22,7 @@ class ImageServices(IImageServices):
         }
         self.CHUNK_SIZE = 1024 * 1024
         self.MAX_FILE_SIZE_BYTES = 2 * 1024 * 1024
+        self.logger = logger.bind(component="ImageServices")
 
     async def save_image(self, file: FileDomain, file_slug: str) -> str:
         """
@@ -37,6 +39,12 @@ class ImageServices(IImageServices):
                 while chunk := await file.file_object.read(self.CHUNK_SIZE):
                     total_size += len(chunk)
                     if total_size >= self.MAX_FILE_SIZE_BYTES:
+                        self.logger.warning(
+                            "image_upload_rejected",
+                            reason="file_too_large",
+                            file_slug=file_slug,
+                            size=total_size,
+                        )
                         raise ValueError("Файл превышает допустимый размер")
                     await buffer.write(chunk)
             try:
@@ -44,7 +52,18 @@ class ImageServices(IImageServices):
                     img.verify()
             except UnidentifiedImageError:
                 file_path.unlink(missing_ok=True)
+                self.logger.warning(
+                    "image_upload_rejected",
+                    reason="invalid_image",
+                    file_slug=file_slug,
+                )
                 raise ValueError("Некорректный или поврежденный файл изображения")
+            self.logger.info(
+                "image_saved",
+                file_slug=file_slug,
+                file_name=file_name,
+                size=total_size,
+            )
             return f"/media/{file_slug}/{file_name}"
         finally:
             await file.file_object.close()
@@ -57,5 +76,7 @@ class ImageServices(IImageServices):
             return
         file_path = (self.BASE_DIR / image_url.lstrip("/")).resolve()
         if not file_path.is_relative_to(self.MEDIA_ROOT.resolve()):
+            self.logger.warning("image_remove_path_rejected", image_url=image_url)
             return
         file_path.unlink(missing_ok=True)
+        self.logger.info("image_removed", image_url=image_url)

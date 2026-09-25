@@ -6,25 +6,29 @@ import jwt
 from passlib.context import CryptContext
 
 from app.core.config import Settings
+from app.domain.interfaces.logging.i_logger import ILogger
 from app.domain.interfaces.utils.i_token_services import ITokenServices
 
 
 class TokenServices(ITokenServices):
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: Settings, logger: ILogger):
         self.settings = settings
         self.pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
+        self.logger = logger.bind(component="TokenServices")
 
     def decode_token(self, token: str) -> dict | None:
         try:
             payload = jwt.decode(
                 token, self.settings.SECRET_KEY, algorithms=[self.settings.ALGORITHM]
             )
-            return {
-                "email": payload["sub"],
-                "token_type": payload["token_type"],
-            }
-        except jwt.PyJWTError:
+        except jwt.PyJWTError as exc:
+            self.logger.debug("token_decode_failed", error_type=type(exc).__name__)
             return None
+        self.logger.debug("token_decoded", token_type=payload.get("token_type"))
+        return {
+            "email": payload["sub"],
+            "token_type": payload["token_type"],
+        }
 
     def hash_password(self, password: str) -> str:
         return self.pwd_context.hash(password)
@@ -37,9 +41,11 @@ class TokenServices(ITokenServices):
             minutes=self.settings.ACCESS_TOKEN_EXPIRE_MINUTES
         )
         to_encode = {**data, "exp": expire, "token_type": "access"}
-        return jwt.encode(
+        token = jwt.encode(
             to_encode, self.settings.SECRET_KEY, algorithm=self.settings.ALGORITHM
         )
+        self.logger.debug("access_token_created", expires_at=expire.isoformat())
+        return token
 
     @staticmethod
     def create_refresh_token() -> str:
