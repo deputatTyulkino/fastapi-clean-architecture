@@ -6,6 +6,7 @@ from app.application.schemas.entities.cart_items_schemas import (
     CartItemSchema,
     CreateCartItemSchema,
 )
+from app.application.schemas.utils.success_delete_schema import SuccessDeleteSchema
 from app.application.schemas.utils.success_response_schema import SuccessResponseSchema
 from app.application.services.cart_items_services import CartItemsServices
 from app.domain.models.users import UserDomain
@@ -71,7 +72,7 @@ async def update_cart_item(
 
 @router.delete(
     "/{product_id}",
-    response_model=SuccessResponseSchema[CartItemSchema],
+    response_model=SuccessResponseSchema[SuccessDeleteSchema],
     status_code=status.HTTP_200_OK,
 )
 async def delete_cart_item(
@@ -81,6 +82,22 @@ async def delete_cart_item(
 ):
     try:
         data = await services.delete_cart_item(cast(int, user.id), product_id)
+        return SuccessResponseSchema(data=data)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.delete(
+    "/delete_all",
+    response_model=SuccessResponseSchema[CartItemSchema],
+    status_code=status.HTTP_200_OK,
+)
+async def delete_all_cart_items(
+    services: Annotated[CartItemsServices, Depends(get_cart_items_services)],
+    user: Annotated[UserDomain, Depends(get_current_user)],
+):
+    try:
+        data = await services.delete_all_cart_items(cast(int, user.id))
         return SuccessResponseSchema(data=data)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))

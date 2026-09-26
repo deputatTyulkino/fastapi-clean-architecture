@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+
 from app.domain.models.cart_items import CartItemDomain
 
 
@@ -16,5 +17,9 @@ class ICartItemsRepo(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    async def delete(self, user_id: int, product_id: int) -> int:
+    async def delete(self, user_id: int, product_id: int) -> int | None:
+        raise NotImplementedError()
+
+    @abstractmethod
+    async def delete_all(self, user_id: int) -> int | None:
         raise NotImplementedError()

@@ -1,7 +1,10 @@
+from typing import cast
+
 from app.application.schemas.entities.cart_items_schemas import (
     CartItemSchema,
     CreateCartItemSchema,
 )
+from app.application.schemas.utils.success_delete_schema import SuccessDeleteSchema
 from app.domain.interfaces.logging.i_logger import ILogger
 from app.domain.interfaces.redis.i_state_client import IStateClient
 from app.domain.interfaces.uow.i_unit_of_work import IUnitOfWork
@@ -61,8 +64,35 @@ class CartItemsServices:
             )
         return CartItemSchema.model_validate(updated_cart_item)
 
-    async def delete_cart_item(self, user_id: int, product_id: int) -> int:
+    async def delete_cart_item(
+        self, user_id: int, product_id: int
+    ) -> SuccessDeleteSchema:
         async with self.uow as uow:
             await self._check_user_and_product(user_id, product_id)
-            deleted_product_id = await uow.cart_items.delete(user_id, product_id)
-        return deleted_product_id
+            deleted_cart_item_id = await uow.cart_items.delete(user_id, product_id)
+        if deleted_cart_item_id is None:
+            self.logger.warning(
+                "delete_cart_items_rejected", user_id=user_id, reason="not found"
+            )
+            raise ValueError(f"Не удалось удалить корзину пользователя с ID {user_id}")
+        return SuccessDeleteSchema(
+            detail=f"Успешно удалён продукт из корзины с ID {deleted_cart_item_id}"
+        )
+
+    async def delete_all_cart_items(self, user_id: int) -> SuccessDeleteSchema:
+        async with self.uow as uow:
+            user = await uow.users.get_by_id(user_id)
+            if user is None:
+                self.logger.warning(
+                    "cart_operation_rejected", user_id=user_id, reason="user_not_found"
+                )
+                raise ValueError("Ввойдите в систему")
+            deleted_cart_items_ids = await uow.cart_items.delete_all(cast(int, user.id))
+        if deleted_cart_items_ids is None:
+            self.logger.warning(
+                "delete_cart_items_rejected", user_id=user_id, reason="not found"
+            )
+            raise ValueError(f"Не удалось удалить корзину пользователя с ID {user_id}")
+        return SuccessDeleteSchema(
+            detail=f"Успешно удалена корзина пользователя с ID {user_id}"
+        )

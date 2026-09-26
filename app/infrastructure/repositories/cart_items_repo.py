@@ -77,7 +77,7 @@ class CartItemsRepo(ICartItemsRepo):
         )
         return self._to_domain_model(updated_cart_item)
 
-    async def delete(self, user_id: int, product_id: int) -> int:
+    async def delete(self, user_id: int, product_id: int) -> int | None:
         stmt = (
             delete(CartItemORM)
             .filter(
@@ -85,13 +85,12 @@ class CartItemsRepo(ICartItemsRepo):
             )
             .returning(CartItemORM.id)
         )
-        try:
-            deleted_cart_items_id = (await self.db.execute(stmt)).scalar_one()
-        except NoResultFound:
+        deleted_cart_items_id = (await self.db.execute(stmt)).scalar_one_or_none()
+        if deleted_cart_items_id is None:
             self.logger.warning(
                 "cart_item_delete_not_found", user_id=user_id, product_id=product_id
             )
-            raise
+            return None
         self.logger.info(
             "cart_item_deleted",
             user_id=user_id,
@@ -99,3 +98,20 @@ class CartItemsRepo(ICartItemsRepo):
             cart_item_id=deleted_cart_items_id,
         )
         return deleted_cart_items_id
+
+    async def delete_all(self, user_id: int) -> int | None:
+        stmt = (
+            delete(CartItemORM)
+            .filter(CartItemORM.user_id == user_id)
+            .returning(CartItemORM.id)
+        )
+        deleted_cart_items_ids = (await self.db.execute(stmt)).scalar_one_or_none()
+        if deleted_cart_items_ids is None:
+            self.logger.warning("cart_item_delete_not_found", user_id=user_id)
+            return None
+        self.logger.info(
+            "cart_item_deleted",
+            user_id=user_id,
+            cart_item_id=deleted_cart_items_ids,
+        )
+        return deleted_cart_items_ids
