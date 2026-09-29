@@ -11,7 +11,7 @@ class StructlogLogger:
     def __init__(self, wrapped: Any | None = None) -> None:
         self._logger = wrapped if wrapped is not None else structlog.get_logger()
 
-    def bind(self, **context: Any) -> "StructlogLogger":
+    def bind(self, **context: Any) -> StructlogLogger:
         return StructlogLogger(self._logger.bind(**context))
 
     def debug(self, event: str, **kwargs: Any) -> None:

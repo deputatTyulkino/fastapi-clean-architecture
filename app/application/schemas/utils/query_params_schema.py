@@ -1,23 +1,32 @@
 from typing import Annotated
 
-from fastapi import Path, Query
+from fastapi import Form, Path, Query
 from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, Field, ValidationError, model_validator
 
 
-class QueryParamsProductsSchema(BaseModel):
+class QueryParamsSchema(BaseModel):
     page: int = Field(default=1, ge=1, description="Номер страницы")
     limit: int = Field(
         default=6, ge=1, le=100, description="Количество элементов на странице"
     )
-    search: str | None = Field(min_length=1, description="Поиск по названию товара")
-    min_price: float | None = Field(ge=0, description="Минимальная цена товара")
-    max_price: float | None = Field(ge=0, description="Максимальная цена товара")
-    seller_id: int | None = Field(ge=0, description="ID продавца для фильтрации")
 
     @property
     def offset(self) -> int:
         return (self.page - 1) * self.limit
+
+    def model_dump(self, **kwargs):
+        return {
+            **super().model_dump(**kwargs),
+            "offset": self.offset,
+        }
+
+
+class QueryParamsProductsSchema(QueryParamsSchema):
+    search: str | None = Field(min_length=1, description="Поиск по названию товара")
+    min_price: float | None = Field(ge=0, description="Минимальная цена товара")
+    max_price: float | None = Field(ge=0, description="Максимальная цена товара")
+    seller_id: int | None = Field(ge=0, description="ID продавца для фильтрации")
 
     @model_validator(mode="after")
     def validate_price(self):
@@ -47,22 +56,10 @@ class QueryParamsProductsSchema(BaseModel):
         except ValidationError as e:
             raise RequestValidationError(e.errors())
 
-    def model_dump(self, **kwargs):
-        return {
-            **super().model_dump(**kwargs),
-            "offset": self.offset,
-        }
 
-
-class ParamsReviewsSchema(BaseModel):
+class ParamsReviewsSchema(QueryParamsSchema):
     product_id: int = Field(ge=0, description="ID товара для фильтрации")
-    limit: int = Field(default=10, ge=0, description="Количество отзывов для вывода")
-    page: int = Field(default=0, ge=0, description="Страница")
     grade: int | None = Field(default=None, ge=0, le=5, description="Оценка отзыва")
-
-    @property
-    def offset(self) -> int:
-        return (self.page - 1) * self.limit
 
     @classmethod
     def as_form(
@@ -82,8 +79,15 @@ class ParamsReviewsSchema(BaseModel):
         except ValidationError as e:
             raise RequestValidationError(e.errors())
 
-    def model_dump(self, **kwargs):
-        return {
-            **super().model_dump(**kwargs),
-            "offset": self.offset,
-        }
+
+class OrdersParamsSchema(QueryParamsSchema):
+    @classmethod
+    def as_form(
+        cls,
+        limit: Annotated[int, Query(...)] = 10,
+        page: Annotated[int, Query(...)] = 0,
+    ):
+        try:
+            return cls(limit=limit, page=page)
+        except ValidationError as e:
+            raise RequestValidationError(e.errors())

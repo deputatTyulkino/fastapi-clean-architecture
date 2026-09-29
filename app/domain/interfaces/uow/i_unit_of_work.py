@@ -3,6 +3,7 @@ from typing import Self
 
 from app.domain.interfaces.repositories.i_cart_item_repo import ICartItemsRepo
 from app.domain.interfaces.repositories.i_category_repo import ICategoryRepo
+from app.domain.interfaces.repositories.i_orders_repo import IOrdersRepo
 from app.domain.interfaces.repositories.i_product_repo import IProductRepo
 from app.domain.interfaces.repositories.i_review_repo import IReviewsRepo
 from app.domain.interfaces.repositories.i_seller_repo import ISellerRepo
@@ -38,6 +39,11 @@ class IUnitOfWork(ABC):
     @property
     @abstractmethod
     def cart_items(self) -> ICartItemsRepo:
+        raise NotImplementedError()
+
+    @property
+    @abstractmethod
+    def orders(self) -> IOrdersRepo:
         raise NotImplementedError()
 
     @abstractmethod

@@ -7,9 +7,6 @@ class Settings(BaseSettings):
     SECRET_KEY: str
     ALGORITHM: str = "HS256"
     DATABASE_URL: str
-    YOOKASSA_SHOP_ID: int
-    YOOKASSA_SECRET_KEY: str
-    YOOKASSA_RETURN_URL: str
     ACCESS_TOKEN_EXPIRE_MINUTES: int
     REFRESH_TOKEN_EXPIRE_DAYS: int
     REDIS_VOLATILE_URL: str
@@ -17,6 +14,15 @@ class Settings(BaseSettings):
     REFRESH_COOKIE_NAME: str
     RESEND_API_KEY: str
     TEST_MAIL: str
+    PAYMENT_TOKEN: str = (
+        "68711168852240a2f34b6a8b19d2cfbd296c7d2a6dff8b23eda6278985959346"
+    )
+    TERMINAL_KEY: str = "TBankTest"
+    NOTIFICATION_URL: str
+    TAXATION: str
+    RECURRENT: str
+    TAX: str
+    TBANK_URL: str = "https://securepay.tinkoff.ru"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

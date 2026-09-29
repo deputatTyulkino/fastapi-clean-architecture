@@ -24,6 +24,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="FastAPI Интернет-магазин", lifespan=lifespan)
 
+
 app.include_router(users_router)
 app.include_router(categories_router)
 app.include_router(products_router)
