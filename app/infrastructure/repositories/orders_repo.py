@@ -57,6 +57,7 @@ class OrdersRepo(IOrdersRepo):
         )
 
     async def get_all(self, user_id: int, offset: int, limit: int) -> list[OrderDomain]:
+        self.logger.debug("orders_get_all", user_id=user_id, offset=offset, limit=limit)
         query = (
             select(OrderORM)
             .filter(OrderORM.user_id == user_id)
@@ -64,12 +65,15 @@ class OrdersRepo(IOrdersRepo):
             .offset(offset)
         )
         orders = (await self.db.scalars(query)).all()
+        self.logger.debug("orders_get_all_done", user_id=user_id, count=len(orders))
         return [self._to_domain_model(order) for order in orders]
 
     async def get_by_id(self, order_id: int) -> OrderDomain | None:
+        self.logger.debug("orders_get_by_id", order_id=order_id)
         query = select(OrderORM).filter(OrderORM.id == order_id)
         order = (await self.db.execute(query)).scalar_one_or_none()
         if order is None:
+            self.logger.debug("orders_get_by_id_not_found", order_id=order_id)
             return None
         return self._to_domain_model(order)
 
@@ -79,15 +83,27 @@ class OrdersRepo(IOrdersRepo):
         created_order_item = self._to_order_item_orm_model(order_item)
         self.db.add(created_order_item)
         await self.db.flush()
+        self.logger.debug(
+            "order_item_created",
+            order_item_id=created_order_item.id,
+            product_id=created_order_item.product_id,
+            quantity=created_order_item.quantity,
+        )
         return self._to_order_item_domain_model(created_order_item)
 
     async def create_order(self, order: OrderDomain) -> OrderDomain | None:
         created_order = self._to_orm_model(order)
         self.db.add(created_order)
         await self.db.flush()
+        self.logger.info(
+            "order_created", order_id=created_order.id, user_id=created_order.user_id
+        )
         return self._to_domain_model(created_order)
 
     async def update_order(self, order_id: int, **kwargs) -> OrderDomain | None:
+        self.logger.debug(
+            "orders_update", order_id=order_id, fields=sorted(kwargs.keys())
+        )
         stmt = (
             update(OrderORM)
             .filter(OrderORM.id == order_id)
@@ -96,5 +112,7 @@ class OrdersRepo(IOrdersRepo):
         )
         updated_order = (await self.db.execute(stmt)).scalar_one_or_none()
         if updated_order is None:
+            self.logger.warning("orders_update_not_found", order_id=order_id)
             return None
+        self.logger.debug("orders_update_done", order_id=order_id)
         return self._to_domain_model(updated_order)
