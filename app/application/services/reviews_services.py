@@ -12,6 +12,13 @@ from app.domain.interfaces.logging.i_logger import ILogger
 from app.domain.interfaces.redis.i_cache_client import ICacheClient
 from app.domain.interfaces.redis.i_state_client import IStateClient
 from app.domain.interfaces.uow.i_unit_of_work import IUnitOfWork
+from app.domain.interfaces.utils.exceptions import (
+    BusinessRuleViolationError,
+    EntityNotFoundError,
+    PermissionDeniedError,
+    ProductNotFoundError,
+    UserNotFoundError,
+)
 from app.domain.models.reviews import ReviewDomain
 from app.domain.models.users import UserDomain
 from app.infrastructure.redis.decorators import redis_cache
@@ -46,7 +53,7 @@ class ReviewServices:
                     product_id=query_params.product_id,
                     reason="product_not_found",
                 )
-                raise ValueError(
+                raise ProductNotFoundError(
                     f"Продукта c ID {query_params.product_id} не существует"
                 )
             reviews = await uow.reviews.get_all(query_params.model_dump())
@@ -63,7 +70,7 @@ class ReviewServices:
                     review_id=reviews[idx].id,
                     user_id=reviews[idx].user_id,
                 )
-                raise ValueError("Пользователь не найден")
+                raise UserNotFoundError("Пользователь не найден")
             users.append(user)
         return [
             ReviewSchema(**review.as_dict(), user=UserSchema.model_validate(users[ind]))
@@ -84,7 +91,7 @@ class ReviewServices:
                     product_id=product_id,
                     reason="product_not_found",
                 )
-                raise ValueError(f"Продукта с ID {product_id} не существует")
+                raise ProductNotFoundError(f"Продукта с ID {product_id} не существует")
             reviews = await uow.reviews.get_top_reviews(product_id)
             async with asyncio.TaskGroup() as tg:
                 for review in reviews:
@@ -99,7 +106,7 @@ class ReviewServices:
                     review_id=reviews[idx].id,
                     user_id=reviews[idx].user_id,
                 )
-                raise ValueError("Пользователь не найден")
+                raise UserNotFoundError("Пользователь не найден")
             users_top_reviews.append(user)
         return [
             ReviewSchema(
@@ -118,7 +125,7 @@ class ReviewServices:
                 self.logger.warning(
                     "review_creation_rejected", user_id=user_id, reason="user_not_found"
                 )
-                raise ValueError(f"Пользователя с ID {user_id} не существует")
+                raise UserNotFoundError(f"Пользователя с ID {user_id} не существует")
             exists_product = await uow.products.exists_by_id(review_data.product_id)
             if not exists_product:
                 self.logger.warning(
@@ -126,7 +133,7 @@ class ReviewServices:
                     product_id=review_data.product_id,
                     reason="product_not_found",
                 )
-                raise ValueError(
+                raise ProductNotFoundError(
                     f"Продукта с ID {review_data.product_id} не существует"
                 )
             review = await uow.reviews.create(
@@ -151,7 +158,7 @@ class ReviewServices:
                 self.logger.warning(
                     "review_update_rejected", review_id=id, reason="not_found"
                 )
-                raise ValueError(f"Отзыва с ID {id} не существует")
+                raise EntityNotFoundError(f"Отзыва с ID {id} не существует")
             if review.user_id != user_id:
                 self.logger.warning(
                     "review_update_rejected",
@@ -159,7 +166,7 @@ class ReviewServices:
                     user_id=user_id,
                     reason="not_owner",
                 )
-                raise ValueError("У вас нет прав на изменение этого отзыва")
+                raise PermissionDeniedError("У вас нет прав на изменение этого отзыва")
             review_coroutine = uow.reviews.update(
                 id, ReviewDomain(**review_data.model_dump())
             )
@@ -169,7 +176,7 @@ class ReviewServices:
                 self.logger.warning(
                     "review_update_failed", review_id=id, reason="repo_returned_none"
                 )
-                raise ValueError(f"Не удалось обновить отзыв с ID {id}")
+                raise BusinessRuleViolationError(f"Не удалось обновить отзыв с ID {id}")
             await uow.commit()
         await self.cache_client.delete(
             f"products:{review.product_id}:reviews",
@@ -186,7 +193,7 @@ class ReviewServices:
                 self.logger.warning(
                     "review_delete_rejected", review_id=id, reason="not_found"
                 )
-                raise ValueError(f"Отзыва с ID {id} не существует")
+                raise EntityNotFoundError(f"Отзыва с ID {id} не существует")
             if review.user_id != user_id and not is_admin:
                 self.logger.warning(
                     "review_delete_rejected",
@@ -194,7 +201,7 @@ class ReviewServices:
                     user_id=user_id,
                     reason="not_owner",
                 )
-                raise ValueError("У вас нет прав на удаление этого отзыва")
+                raise PermissionDeniedError("У вас нет прав на удаление этого отзыва")
             review_id = await uow.reviews.delete(id)
             await uow.commit()
         await self.cache_client.delete(

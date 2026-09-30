@@ -13,6 +13,13 @@ from app.core.config import Settings
 from app.domain.interfaces.logging.i_logger import ILogger
 from app.domain.interfaces.redis.i_cache_client import ICacheClient
 from app.domain.interfaces.uow.i_unit_of_work import IUnitOfWork
+from app.domain.interfaces.utils.exceptions import (
+    AuthenticationError,
+    BusinessRuleViolationError,
+    EntityNotFoundError,
+    InsufficientStockError,
+    ProductNotFoundError,
+)
 from app.domain.interfaces.utils.i_payment_repo import (
     IItem,
     IPaymentRepo,
@@ -109,7 +116,7 @@ class OrdersServices:
         async with self.uow as uow:
             user = await uow.users.get_by_id(user_id)
             if user is None:
-                raise ValueError("Ввойдите в систему")
+                raise AuthenticationError("Ввойдите в систему")
             orders = await uow.orders.get_all(
                 user_id, query_params.offset, query_params.limit
             )
@@ -119,30 +126,32 @@ class OrdersServices:
         async with self.uow as uow:
             user = await uow.users.get_by_id(user_id)
             if user is None:
-                raise ValueError("Ввойдите в систему")
+                raise AuthenticationError("Ввойдите в систему")
             order = await uow.orders.get_by_id(order_id)
             if order is None:
-                raise ValueError(f"Заказа с ID {order_id} не существует")
+                raise EntityNotFoundError(f"Заказа с ID {order_id} не существует")
         return OrderResponseSchema.model_validate(order)
 
     async def create_order(self, user_id: int) -> CheckoutOrderResponseSchema:
         async with self.uow as uow:
             user = await uow.users.get_by_id(user_id)
             if user is None:
-                raise ValueError("Ввойдите в систему")
+                raise AuthenticationError("Ввойдите в систему")
             cart_items = await uow.cart_items.get_by_user_id(user_id)
             if len(cart_items) == 0:
-                raise ValueError("Корзина пуста")
+                raise EntityNotFoundError("Корзина пуста")
             order = await uow.orders.create_order(OrderDomain(user_id))
             if order is None:
-                raise ValueError("Ошибка сервера")
+                raise BusinessRuleViolationError("Ошибка сервера")
             order_items_data: list[IItem] = []
             for cart_item in cart_items:
                 product = await uow.products.get_by_id(cart_item.product_id)
                 if product is None or not product.is_active:
-                    raise ValueError("Продукт не активен")
+                    raise ProductNotFoundError("Продукт не активен")
                 if product.stock < cart_item.quantity:
-                    raise ValueError(f"Недостаточно {product.name} на складе")
+                    raise InsufficientStockError(
+                        f"Недостаточно {product.name} на складе"
+                    )
                 order_item = await uow.orders.create_order_item(
                     OrderItemDomain(
                         product_id=cart_item.product_id,
@@ -151,7 +160,7 @@ class OrdersServices:
                     )
                 )
                 if order_item is None:
-                    raise ValueError("Ошибка сервера")
+                    raise BusinessRuleViolationError("Ошибка сервера")
                 order.order_items.append(order_item)
                 product.stock -= cart_item.quantity
                 order_items_data.append(
@@ -168,7 +177,7 @@ class OrdersServices:
                 order_items=order.order_items,
             )
             if order is None:
-                raise ValueError("Ошибка сервера")
+                raise BusinessRuleViolationError("Ошибка сервера")
             payment_data: (
                 IPaymentResponse | None
             ) = await self.payment_repo.create_payment(
@@ -181,18 +190,18 @@ class OrdersServices:
                 )
             )
             if payment_data is None:
-                raise ValueError("Возникла ошибка при оплате")
+                raise BusinessRuleViolationError("Возникла ошибка при оплате")
             if not payment_data["Success"]:
-                raise ValueError("Возникла ошибка при оплате")
+                raise BusinessRuleViolationError("Возникла ошибка при оплате")
             async with self.uow as uow:
                 deleted_cart_items_ids = await uow.cart_items.delete_all(user_id)
                 if deleted_cart_items_ids is None:
-                    raise ValueError("Ошибка сервера")
+                    raise BusinessRuleViolationError("Ошибка сервера")
                 updated_order = await uow.orders.update_order(
                     cast(int, order.id), payment_id=payment_data["PaymentURL"]
                 )
                 if updated_order is None:
-                    raise ValueError("Ошибка сервера")
+                    raise BusinessRuleViolationError("Ошибка сервера")
                 await uow.commit()
             return CheckoutOrderResponseSchema(
                 **updated_order.as_dict(), confirmation_url=payment_data["PaymentURL"]
@@ -204,10 +213,10 @@ class OrdersServices:
         async with self.uow as uow:
             user = await uow.users.get_by_id(user_id)
             if user is None:
-                raise ValueError("Ввойдите в систему")
+                raise AuthenticationError("Ввойдите в систему")
             order = await uow.orders.get_by_id(order_id)
             if order is None:
-                raise ValueError(f"Заказ с ID {order_id} не найден")
+                raise EntityNotFoundError(f"Заказ с ID {order_id} не найден")
             message = ""
             if order.status == "paid":
                 message = f"Спасибо! Заказ #{order_id} оплачен. Ожидайте доставку."
@@ -221,7 +230,7 @@ class OrdersServices:
         self, client_ip: str | None, payment_data: IPaymentWebhookRequest
     ):
         if not self._is_ip_allowed(client_ip):
-            raise ValueError("Недоступный IP")
+            raise AuthenticationError("Недоступный IP")
         async with self.uow as uow:
             order = await uow.orders.get_by_id(int(payment_data["OrderId"]))
             if order is None:

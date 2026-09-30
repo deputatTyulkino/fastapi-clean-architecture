@@ -10,6 +10,16 @@ from app.application.schemas.entities.users_schemas import (
 )
 from app.application.schemas.utils.success_response_schema import SuccessResponseSchema
 from app.application.services.users_services import UserServices
+from app.domain.interfaces.utils.exceptions import (
+    AuthenticationError,
+    UserAlreadyExistsError,
+    ValidationError,
+)
+from app.infrastructure.depends.utils.exceptions import (
+    ConflictHTTPError,
+    ForbiddenHTTPError,
+    UnprocessableEntityHTTPError,
+)
 from app.presentation.depends.entities.users_services import get_users_servcies
 
 router = APIRouter(prefix="/auth", tags=["users"])
@@ -28,8 +38,8 @@ async def register_user(
     try:
         data = await services.register_user(user_data)
         return SuccessResponseSchema(data=ResponseUserSchema.model_validate(data))
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    except UserAlreadyExistsError:
+        raise ConflictHTTPError()
 
 
 @router.post(
@@ -54,8 +64,10 @@ async def verify_user(
             max_age=60 * 60 * 24 * 30,
         )
         return SuccessResponseSchema(data=ResponseUserSchema.model_validate(data))
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except AuthenticationError:
+        raise ForbiddenHTTPError()
+    except ValidationError:
+        raise UnprocessableEntityHTTPError()
 
 
 @router.post(
@@ -81,8 +93,8 @@ async def login_user(
             max_age=60 * 60 * 24 * 30,
         )
         return SuccessResponseSchema(data=ResponseUserSchema.model_validate(data))
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except AuthenticationError:
+        raise ForbiddenHTTPError()
 
 
 @router.post(
@@ -100,9 +112,9 @@ async def refresh_token(
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Авторизуйтесь снова")
     try:
         data = await services.refresh_token(refresh_token)
-    except ValueError as e:
+    except AuthenticationError:
         response.delete_cookie("refresh_token", path="/auth")
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise ForbiddenHTTPError()
     return SuccessResponseSchema(data=ResponseUserSchema.model_validate(data))
 
 

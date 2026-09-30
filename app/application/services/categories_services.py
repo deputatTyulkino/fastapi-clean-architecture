@@ -7,6 +7,11 @@ from app.application.schemas.utils.success_delete_schema import SuccessDeleteSch
 from app.domain.interfaces.logging.i_logger import ILogger
 from app.domain.interfaces.redis.i_cache_client import ICacheClient
 from app.domain.interfaces.uow.i_unit_of_work import IUnitOfWork
+from app.domain.interfaces.utils.exceptions import (
+    CategoryAlreadyExistsError,
+    CategoryNotFoundError,
+    ProductNotFoundError,
+)
 from app.domain.models.categories import CategoryDomain
 from app.infrastructure.redis.decorators import redis_cache
 
@@ -21,11 +26,7 @@ class CategoryServices:
     async def get_all_categories(self) -> list[CategorySchema]:
         async with self.uow as uow:
             categories = await uow.categories.get_all()
-        return (
-            [CategorySchema.model_validate(category) for category in categories]
-            if categories
-            else []
-        )
+        return [CategorySchema.model_validate(category) for category in categories]
 
     @redis_cache(lambda id: f"categories:{id}", 10000, CategorySchema)
     async def get_category_by_id(self, id: int) -> CategorySchema:
@@ -35,7 +36,7 @@ class CategoryServices:
             self.logger.warning(
                 "category_lookup_failed", category_id=id, reason="not_found"
             )
-            raise ValueError(f"Категории с ID {id} не существует")
+            raise CategoryNotFoundError(f"Категории с ID {id} не существует")
         return CategorySchema.model_validate(category)
 
     @redis_cache(
@@ -50,7 +51,7 @@ class CategoryServices:
                     product_id=product_id,
                     reason="product_not_found",
                 )
-                raise ValueError(f"Продукта с ID {product_id} не существует")
+                raise ProductNotFoundError(f"Продукта с ID {product_id} не существует")
             category = await uow.categories.get_by_product_id(product_id)
             if category is None:
                 self.logger.warning(
@@ -58,7 +59,7 @@ class CategoryServices:
                     product_id=product_id,
                     reason="category_not_found",
                 )
-                raise ValueError("Категория не найдена")
+                raise CategoryNotFoundError("Категория не найдена")
         return CategorySchema.model_validate(category)
 
     async def create_category(
@@ -72,7 +73,7 @@ class CategoryServices:
                     name=category_data.name,
                     reason="name_taken",
                 )
-                raise ValueError(
+                raise CategoryAlreadyExistsError(
                     f"Категория с именем {category_data.name} уже существует"
                 )
             new_category = await uow.categories.create(
@@ -91,7 +92,7 @@ class CategoryServices:
                 self.logger.warning(
                     "category_update_rejected", category_id=id, reason="not_found"
                 )
-                raise ValueError(f"Категории с ID {id} не существует")
+                raise CategoryNotFoundError(f"Категории с ID {id} не существует")
             updated_category = await uow.categories.update(
                 id, CategoryDomain(**category_data.model_dump())
             )
@@ -106,7 +107,7 @@ class CategoryServices:
                 self.logger.warning(
                     "category_delete_rejected", category_id=id, reason="not_found"
                 )
-                raise ValueError(f"Категории с id {id} не существует")
+                raise CategoryNotFoundError(f"Категории с id {id} не существует")
             cat_id = await uow.categories.delete(id)
             await uow.commit()
         await self.cache_client.delete("all_categories", f"categories:{id}")

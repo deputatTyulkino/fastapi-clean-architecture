@@ -16,6 +16,11 @@ from app.domain.interfaces.mail.i_mail_manager import IMailManager
 from app.domain.interfaces.redis.i_serializer_services import ISerializerServices
 from app.domain.interfaces.redis.i_state_client import IStateClient
 from app.domain.interfaces.uow.i_unit_of_work import IUnitOfWork
+from app.domain.interfaces.utils.exceptions import (
+    AuthenticationError,
+    UserAlreadyExistsError,
+    ValidationError,
+)
 from app.domain.interfaces.utils.i_token_services import ITokenServices
 from app.domain.models.users import UserDomain
 from app.infrastructure.celery.tasks.mail_tasks import verify_mail_task
@@ -61,14 +66,14 @@ class UserServices:
                 "email_verification_code_expired",
                 user_code=verify_user_data.user_code,
             )
-            raise ValueError("Действие кода закончилось")
+            raise AuthenticationError("Действие кода закончилось")
         user_data = self.serializer_services.deserializer(serialized_user_data)
         if user_data is None:
             self.logger.error(
                 "email_verification_deserialization_failed",
                 user_code=verify_user_data.user_code,
             )
-            raise ValueError("Ошибка сериализации")
+            raise ValidationError("Ошибка сериализации")
         attempts = user_data["attempts"]
         if attempts >= 5:
             self.logger.warning(
@@ -76,7 +81,7 @@ class UserServices:
                 user_code=verify_user_data.user_code,
                 attempts=attempts,
             )
-            raise ValueError("Превышено количество попыток")
+            raise AuthenticationError("Превышено количество попыток")
         code = user_data["code"]
         if code != hashlib.sha256(verify_user_data.code.encode()).hexdigest():
             user_data["attempts"] += 1
@@ -90,7 +95,7 @@ class UserServices:
                 user_code=verify_user_data.user_code,
                 attempts=user_data["attempts"],
             )
-            raise ValueError("Неверный код")
+            raise AuthenticationError("Неверный код")
         async with self.uow as uow:
             user = await uow.users.create(
                 UserDomain(
@@ -112,7 +117,9 @@ class UserServices:
             user = await uow.users.get_by_email(user_data.email)
             if user:
                 self.logger.warning("registration_rejected", reason="email_taken")
-                raise ValueError(f"Пользователь с {user.email} уже существует")
+                raise UserAlreadyExistsError(
+                    f"Пользователь с {user.email} уже существует"
+                )
         user_verify_code = str(uuid.uuid4())
         code = self.mail_manager.generate_verification_code()
         hash_code = hashlib.sha256(code.encode()).hexdigest()
@@ -142,12 +149,12 @@ class UserServices:
                 user_data.password, user.hashed_password
             ):
                 self.logger.warning("login_failed", reason="invalid_credentials")
-                raise ValueError("Неправильный email или пароль")
+                raise AuthenticationError("Неправильный email или пароль")
             if not user.is_active:
                 self.logger.warning(
                     "login_failed", reason="inactive_user", user_id=user.id
                 )
-                raise ValueError("Пользователь не активен")
+                raise AuthenticationError("Пользователь не активен")
         family_id = str(uuid.uuid4())
         access, refresh = await self._create_tokens(user, family_id)
         self.logger.info("user_logged_in", user_id=user.id, role=user.role)
@@ -161,7 +168,7 @@ class UserServices:
         record = await self.refresh_token_repo.get(old_refresh_hash)
         if record is None:
             self.logger.warning("refresh_token_rejected", reason="not_found")
-            raise ValueError(message)
+            raise AuthenticationError(message)
         async with self.uow as uow:
             user = await uow.users.get_by_id(record["user_id"])
         if user is None or not user.is_active:
@@ -171,7 +178,7 @@ class UserServices:
                 reason="user_missing_or_inactive",
                 user_id=record["user_id"],
             )
-            raise ValueError(message)
+            raise AuthenticationError(message)
         access = self.token_services.create_access_token(
             {"sub": user.email, "role": user.role, "id": user.id}
         )

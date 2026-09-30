@@ -16,6 +16,14 @@ from app.domain.interfaces.logging.i_logger import ILogger
 from app.domain.interfaces.redis.i_cache_client import ICacheClient
 from app.domain.interfaces.redis.i_serializer_services import ISerializerServices
 from app.domain.interfaces.uow.i_unit_of_work import IUnitOfWork
+from app.domain.interfaces.utils.exceptions import (
+    CategoryNotFoundError,
+    PermissionDeniedError,
+    ProductAlreadyExistsError,
+    ProductNotFoundError,
+    UserNotFoundError,
+    ValidationError,
+)
 from app.domain.interfaces.utils.i_image_storage import IImageServices
 from app.domain.models.files import FileDomain
 from app.domain.models.products import ProductDomain
@@ -56,7 +64,7 @@ class ProductServices:
                         seller_id=seller_id,
                         reason="seller_not_found",
                     )
-                    raise ValueError(f"Продавца с ID {seller_id} не существует")
+                    raise UserNotFoundError(f"Продавца с ID {seller_id} не существует")
             products, total, page, limit = await uow.products.get_all(filters)
             products_rating: list[tuple[int, Task[Decimal] | Decimal]] = []
             async with TaskGroup() as tg:
@@ -96,7 +104,7 @@ class ProductServices:
                             "product_rating_serialization_failed",
                             product_id=product_id,
                         )
-                        raise RuntimeError("Ошибка сериализации")
+                        raise ValidationError("Ошибка сериализации")
                     await self.cache_client.set(
                         f"products:{product_id}:rating", serilized_rating, 100
                     )
@@ -121,7 +129,7 @@ class ProductServices:
                 self.logger.warning(
                     "product_lookup_failed", product_id=id, reason="not_found"
                 )
-                raise ValueError(f"Продукта с ID {id} не существует")
+                raise ProductNotFoundError(f"Продукта с ID {id} не существует")
             cache_rating = await self.cache_client.get(f"products:{id}:rating")
             if cache_rating is None:
                 products_rating = await uow.products.get_rating_by_id(id)
@@ -132,7 +140,7 @@ class ProductServices:
                     self.logger.error(
                         "product_rating_serialization_failed", product_id=id
                     )
-                    raise RuntimeError("Ошибка сериализации")
+                    raise ValidationError("Ошибка сериализации")
                 await self.cache_client.set(
                     f"products:{id}:rating", serialized_rating, 100
                 )
@@ -156,7 +164,9 @@ class ProductServices:
                     category_id=category_id,
                     reason="category_not_found",
                 )
-                raise ValueError(f"Категории с ID {category_id} не существует")
+                raise CategoryNotFoundError(
+                    f"Категории с ID {category_id} не существует"
+                )
             products = await uow.products.get_by_category(category_id)
             products_rating: list[tuple[int, Task[Decimal] | Decimal]] = []
             async with TaskGroup() as tg:
@@ -196,7 +206,7 @@ class ProductServices:
                             "product_rating_serialization_failed",
                             product_id=product_id,
                         )
-                        raise RuntimeError("Ошибка сериализации")
+                        raise ValidationError("Ошибка сериализации")
                     await self.cache_client.set(
                         f"products:{product_id}:rating", serilized_rating, 100
                     )
@@ -219,7 +229,7 @@ class ProductServices:
                     category_id=product_data.category_id,
                     reason="category_not_found",
                 )
-                raise ValueError(
+                raise CategoryNotFoundError(
                     f"Категории с ID {product_data.category_id} не существует"
                 )
             exists_product = await uow.products.exists_by_name(product_data.name)
@@ -229,7 +239,9 @@ class ProductServices:
                     name=product_data.name,
                     reason="name_taken",
                 )
-                raise ValueError(f"Продукт с именем {product_data.name} уже существует")
+                raise ProductAlreadyExistsError(
+                    f"Продукт с именем {product_data.name} уже существует"
+                )
             new_image = await self.image_services.save_image(image, "products")
             new_product = await uow.products.create(
                 ProductDomain(
@@ -261,7 +273,7 @@ class ProductServices:
                         name=product_data.name,
                         reason="name_taken",
                     )
-                    raise ValueError(
+                    raise ProductAlreadyExistsError(
                         f"Продукт с именем {product_data.name} уже существует"
                     )
             if product_data.category_id:
@@ -275,7 +287,7 @@ class ProductServices:
                         category_id=product_data.category_id,
                         reason="category_not_found",
                     )
-                    raise ValueError(
+                    raise CategoryNotFoundError(
                         f"Категории с ID {product_data.category_id} не существует"
                     )
             product = await uow.products.get_by_id(product_id)
@@ -285,7 +297,9 @@ class ProductServices:
                     product_id=product_id,
                     reason="not_found",
                 )
-                raise ValueError(f"Товара с таким ID {product_id} не существует")
+                raise ProductNotFoundError(
+                    f"Товара с таким ID {product_id} не существует"
+                )
             if product.seller_id != user_id:
                 self.logger.warning(
                     "product_update_rejected",
@@ -293,7 +307,7 @@ class ProductServices:
                     user_id=user_id,
                     reason="not_owner",
                 )
-                raise ValueError("У вас нет прав изменять этот продукт")
+                raise PermissionDeniedError("У вас нет прав изменять этот продукт")
             if image:
                 if product.image_url:
                     await self.image_services.remove_image(product.image_url)
@@ -323,7 +337,7 @@ class ProductServices:
                 self.logger.warning(
                     "product_delete_rejected", product_id=id, reason="not_found"
                 )
-                raise ValueError(f"Товара с таким ID {id} не существует")
+                raise ProductNotFoundError(f"Товара с таким ID {id} не существует")
             if product.seller_id != user_id and not is_admin:
                 self.logger.warning(
                     "product_delete_rejected",
@@ -331,7 +345,7 @@ class ProductServices:
                     user_id=user_id,
                     reason="not_owner",
                 )
-                raise ValueError("У вас нет прав на удаление этого товара")
+                raise PermissionDeniedError("У вас нет прав на удаление этого товара")
             if product.image_url:
                 await self.image_services.remove_image(product.image_url)
             product_id = await uow.products.delete(id)

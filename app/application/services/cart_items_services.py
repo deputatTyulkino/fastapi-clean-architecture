@@ -8,6 +8,11 @@ from app.application.schemas.utils.success_delete_schema import SuccessDeleteSch
 from app.domain.interfaces.logging.i_logger import ILogger
 from app.domain.interfaces.redis.i_state_client import IStateClient
 from app.domain.interfaces.uow.i_unit_of_work import IUnitOfWork
+from app.domain.interfaces.utils.exceptions import (
+    AuthenticationError,
+    BusinessRuleViolationError,
+    ProductNotFoundError,
+)
 from app.domain.models.cart_items import CartItemDomain
 
 
@@ -24,7 +29,7 @@ class CartItemsServices:
                 self.logger.warning(
                     "cart_operation_rejected", user_id=user_id, reason="user_not_found"
                 )
-                raise ValueError("Ввойдите в систему")
+                raise AuthenticationError("Ввойдите в систему")
             product = await uow.products.get_by_id(product_id)
             if product is None:
                 self.logger.warning(
@@ -33,7 +38,7 @@ class CartItemsServices:
                     product_id=product_id,
                     reason="product_not_found",
                 )
-                raise ValueError("Продукт не найден")
+                raise ProductNotFoundError("Продукт не найден")
 
     async def get_all_cart_items(self, user_id: int) -> list[CartItemSchema]:
         async with self.uow as uow:
@@ -42,7 +47,7 @@ class CartItemsServices:
                 self.logger.warning(
                     "cart_operation_rejected", user_id=user_id, reason="user_not_found"
                 )
-                raise ValueError("Ввойдите в систему")
+                raise AuthenticationError("Ввойдите в систему")
             cart_items = await uow.cart_items.get_by_user_id(user_id)
         return [CartItemSchema.model_validate(cart_item) for cart_item in cart_items]
 
@@ -74,7 +79,9 @@ class CartItemsServices:
             self.logger.warning(
                 "delete_cart_items_rejected", user_id=user_id, reason="not found"
             )
-            raise ValueError(f"Не удалось удалить корзину пользователя с ID {user_id}")
+            raise BusinessRuleViolationError(
+                f"Не удалось удалить корзину пользователя с ID {user_id}"
+            )
         return SuccessDeleteSchema(
             detail=f"Успешно удалён продукт из корзины с ID {deleted_cart_item_id}"
         )
@@ -86,13 +93,15 @@ class CartItemsServices:
                 self.logger.warning(
                     "cart_operation_rejected", user_id=user_id, reason="user_not_found"
                 )
-                raise ValueError("Ввойдите в систему")
+                raise AuthenticationError("Ввойдите в систему")
             deleted_cart_items_ids = await uow.cart_items.delete_all(cast(int, user.id))
         if deleted_cart_items_ids is None:
             self.logger.warning(
                 "delete_cart_items_rejected", user_id=user_id, reason="not found"
             )
-            raise ValueError(f"Не удалось удалить корзину пользователя с ID {user_id}")
+            raise BusinessRuleViolationError(
+                f"Не удалось удалить корзину пользователя с ID {user_id}"
+            )
         return SuccessDeleteSchema(
             detail=f"Успешно удалена корзина пользователя с ID {user_id}"
         )

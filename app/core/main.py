@@ -1,7 +1,10 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, status
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import ValidationError
 
 from app.infrastructure.database.connect import engine, session_factory
 from app.infrastructure.depends.utils.redis_depends import get_redis_manager_infr
@@ -23,6 +26,24 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="FastAPI Интернет-магазин", lifespan=lifespan)
+
+
+@app.exception_handler(HTTPException)
+async def http_exceptions_handlers(exc: HTTPException):
+    return JSONResponse(
+        status_code=exc.status_code, content={"success": False, "detail": exc.detail}
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exceptions_handlers(exc: ValidationError):
+    message = "Validation errors:"
+    for error in exc.errors():
+        message += f"\nField: {error['loc']}, Error: {error['msg']}"
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        content={"success": False, "detail": message},
+    )
 
 
 app.include_router(users_router)
